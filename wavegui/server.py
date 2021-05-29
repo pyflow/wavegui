@@ -27,7 +27,7 @@ from typing import Dict, Tuple, Callable, Any, Awaitable, Optional
 from urllib.parse import urlparse
 
 
-from .core import Expando, expando_to_dict, _config, marshal, _content_type_json, AsyncSite, _get_env, UNICAST, \
+from .core import Expando, expando_to_dict, marshal, _content_type_json, AsyncSite, UNICAST, \
     MULTICAST
 
 logger = logging.getLogger(__name__)

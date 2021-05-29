@@ -31,28 +31,6 @@ UNICAST = 'unicast'
 MULTICAST = 'multicast'
 BROADCAST = 'broadcast'
 
-
-def _get_env(key: str, value: Any):
-    return os.environ.get(f'H2O_WAVE_{key}', value)
-
-
-_default_internal_address = 'http://127.0.0.1:8000'
-
-
-class _Config:
-    def __init__(self):
-        self.internal_address = _get_env('INTERNAL_ADDRESS', _default_internal_address)
-        self.app_address = _get_env('APP_ADDRESS', _get_env('EXTERNAL_ADDRESS', self.internal_address))
-        self.app_mode = _get_env('APP_MODE', UNICAST)
-        self.hub_address = _get_env('ADDRESS', 'http://127.0.0.1:10101')
-        self.hub_access_key_id: str = _get_env('ACCESS_KEY_ID', 'access_key_id')
-        self.hub_access_key_secret: str = _get_env('ACCESS_KEY_SECRET', 'access_key_secret')
-        self.app_access_key_id: str = _get_env('APP_ACCESS_KEY_ID', None) or secrets.token_urlsafe(16)
-        self.app_access_key_secret: str = _get_env('APP_ACCESS_KEY_SECRET', None) or secrets.token_urlsafe(16)
-
-
-_config = _Config()
-
 _key_sep = ' '
 _content_type_json = {'Content-type': 'application/json'}
 
@@ -564,6 +542,7 @@ class Site:
         page.drop()
 
     def _save(self, url: str, patch: str):
+        return
         res = self._http.patch(f'{_config.hub_address}{url}', content=patch)
         if res.status_code != 200:
             raise ServiceError(f'Request failed (code={res.status_code}): {res.text}')

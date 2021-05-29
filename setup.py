@@ -25,7 +25,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     packages=packages,
-    include_package_data=False,
+    include_package_data=True,
     zip_safe=False,
     platforms='any',
     install_requires=['basepy>=0.3.4',

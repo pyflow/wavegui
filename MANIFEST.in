@@ -1,0 +1,2 @@
+include wavegui/www/*
+include wavegui/www/static/*
