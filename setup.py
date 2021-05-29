@@ -29,7 +29,6 @@ setup(
     zip_safe=False,
     platforms='any',
     install_requires=['basepy>=0.3.4',
-        'httpx==0.16.1',
         'starlette==0.13.8',
         'uvicorn==0.12.2',
         ],

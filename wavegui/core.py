@@ -21,7 +21,6 @@ import os.path
 import sys
 from typing import List, Dict, Union, Tuple, Any, Optional
 
-import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -390,62 +389,6 @@ def data(
     return Data(fields, size, rows)
 
 
-class _ServerCacheBase:
-    def _keys(self, text: str) -> List[str]:
-        content = text.strip()
-        if len(content):
-            return content.split('\n')
-        return []
-
-
-class _AsyncServerCache(_ServerCacheBase):
-    def __init__(self):
-        self._http = httpx.AsyncClient(
-            auth=(_config.hub_access_key_id, _config.hub_access_key_secret),
-            verify=False,
-        )
-
-    async def get(self, shard: str, key: str, default=None) -> Any:
-        res = await self._http.get(f'{_config.hub_address}/_c/{shard}/{key}')
-        if res.status_code == 200:
-            return json.loads(res.text)
-        return default
-
-    async def keys(self, shard: str) -> List[str]:
-        res = await self._http.get(f'{_config.hub_address}/_c/{shard}')
-        return self._keys(res.text) if res.status_code == 200 else []
-
-    async def set(self, shard: str, key: str, value: Any):
-        content = json.dumps(value)
-        res = await self._http.put(f'{_config.hub_address}/_c/{shard}/{key}', content=content)
-        if res.status_code != 200:
-            raise ServiceError(f'Request failed (code={res.status_code}): {res.text}')
-
-
-class _ServerCache(_ServerCacheBase):
-    def __init__(self):
-        self._http = httpx.Client(
-            auth=(_config.hub_access_key_id, _config.hub_access_key_secret),
-            verify=False,
-        )
-
-    def get(self, shard: str, key: str, default=None):
-        res = self._http.get(f'{_config.hub_address}/_c/{shard}/{key}')
-        if res.status_code == 200:
-            return json.loads(res.text)
-        return default
-
-    def keys(self, shard: str) -> List[str]:
-        res = self._http.get(f'{_config.hub_address}/_c/{shard}')
-        return self._keys(res.text) if res.status_code == 200 else []
-
-    def set(self, shard: str, key: str, value: Any):
-        content = json.dumps(value)
-        res = self._http.put(f'{_config.hub_address}/_c/{shard}/{key}', content=content)
-        if res.status_code != 200:
-            raise ServiceError(f'Request failed (code={res.status_code}): {res.text}')
-
-
 class PageBase:
     """
     Represents a remote page.
@@ -611,10 +554,7 @@ class Site:
     """
 
     def __init__(self):
-        self._http = httpx.Client(
-            auth=(_config.hub_access_key_id, _config.hub_access_key_secret),
-            verify=False,
-        )
+        self._http = None
 
     def __getitem__(self, url) -> Page:
         return Page(self, url)
@@ -703,10 +643,7 @@ class AsyncSite:
     """
 
     def __init__(self):
-        self._http = httpx.AsyncClient(
-            auth=(_config.hub_access_key_id, _config.hub_access_key_secret),
-            verify=False,
-        )
+        self._http = None
 
     def __getitem__(self, url) -> AsyncPage:
         return AsyncPage(self, url)
