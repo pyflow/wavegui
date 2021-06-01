@@ -20,7 +20,51 @@ def _scan_free_port(port: int = 8000):
         port += 1
 
 
-class WaveApp():
+
+class ClientRequest:
+    bad_request = object()
+    invalid_request = object()
+    action_map = {
+        '*': 'patch',
+        '@': 'query',
+        '+': 'watch',
+        '#': 'noop'
+    }
+    @classmethod
+    def load(cls, msg):
+        parts = msg.split(' ', 3)
+        if len(parts) != 3:
+            return cls.bad_request
+        t, addr, data = parts[0], parts[1], parts[2]
+        action = cls.action_map.get(t, None)
+        if not action:
+            return cls.invalid_request
+        return cls(action, str(addr), data)
+
+    def __init__(self, action, addr, data):
+        assert action in self.action_map.values()
+        self.action = action
+        self.addr = addr
+        self.data = data
+
+
+class WaveClient:
+    def __init__(self, websocket):
+        self.websocket = websocket
+
+    async def handle(self):
+        websocket = self.websocket
+        while True:
+            text = await websocket.receive_text()
+            req = ClientRequest.load(text)
+            if req in [ClientRequest.invalid_request, ClientRequest.bad_request, None]:
+                continue
+            print('client request:', req.action, req.addr, req.data)
+            await websocket.send_text('{"m":{"u":"anon","e":false}}')
+            await websocket.send_text('{"e":"not_found"}')
+
+
+class WaveApp:
     def __init__(self):
         self._routes = []
         self._app = None
@@ -53,11 +97,8 @@ class WaveApp():
 
     async def handle_ws(self, websocket):
         await websocket.accept()
-        while True:
-            text = await websocket.receive_text()
-            print("get websocket request:", text)
-            await websocket.send_text('{"m":{"u":"anon","e":false}}')
-            await websocket.send_text('{"e":"not_found"}')
+        client = WaveClient(websocket)
+        await client.handle()
 
     async def __call__(self, scope, receive, send):
         return await self._app(scope, receive, send)
