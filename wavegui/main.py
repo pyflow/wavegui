@@ -1,3 +1,4 @@
+from typing import Dict, Tuple, Callable, Any, Awaitable, Optional
 from starlette.websockets import WebSocket
 import sys
 import socket
@@ -9,8 +10,18 @@ from starlette.responses import PlainTextResponse, HTMLResponse, FileResponse
 from starlette.routing import Route, Mount, WebSocketRoute
 from starlette.staticfiles import StaticFiles
 import importlib.resources
+import traceback
+import logging
+import json
+from .server import Query
+from .core import AsyncSite, UNICAST, Expando
+from .ui import markdown_card
+
+HandleAsync = Callable[[Query], Awaitable[Any]]
 
 _localhost = '127.0.0.1'
+
+logger = logging.getLogger(__name__)
 
 def _scan_free_port(port: int = 8000):
     while True:
@@ -31,7 +42,7 @@ class ClientRequest:
         '#': 'noop'
     }
     @classmethod
-    def load(cls, msg):
+    def load(cls, client, msg):
         parts = msg.split(' ', 3)
         if len(parts) != 3:
             return cls.bad_request
@@ -39,24 +50,32 @@ class ClientRequest:
         action = cls.action_map.get(t, None)
         if not action:
             return cls.invalid_request
-        return cls(action, str(addr), data)
+        return cls(client, action, str(addr), data)
 
-    def __init__(self, action, addr, data):
+    def __init__(self, client, action, addr, data):
         assert action in self.action_map.values()
         self.action = action
         self.addr = addr
         self.data = data
+        self.client = client
 
+    def json(self):
+        return json.loads(self.data)
+
+    async def send_text(self, text):
+        await self.websocket.send_text(text)
 
 class WaveClient:
     def __init__(self, websocket):
         self.websocket = websocket
+        self.client_id = None
+        self.auth = None
 
     async def handle(self):
         websocket = self.websocket
         while True:
             text = await websocket.receive_text()
-            req = ClientRequest.load(text)
+            req = ClientRequest.load(self, text)
             if req in [ClientRequest.invalid_request, ClientRequest.bad_request, None]:
                 continue
             print('client request:', req.action, req.addr, req.data)
@@ -66,8 +85,86 @@ class WaveClient:
 
 class WaveApp:
     def __init__(self):
+        self._mode = None
+        self._routes = {}
+        self._site: AsyncSite = AsyncSite()
+        self._startup = []
+        self._shutdown = []
+
+
+    def setup(self, route, handle, mode=None, on_startup=None, on_shutdown=None):
+        self.mode = mode or UNICAST
+        self._routes[route] = handle
+        WaveServer.register(self)
+
+    def run(self, no_reload=True):
+        WaveServer.run(no_reload=no_reload)
+
+    async def process(self, req):
+        args = req.json()
+        events_state: Optional[dict] = args.get('', None)
+        q = Query(
+            site=self._site,
+            mode=self._mode,
+            auth=req.client.auth,
+            client_id=req.client.client_id,
+            route=self._route,
+            args=Expando(args),
+            events=Expando(events_state),
+        )
+        # noinspection PyBroadException,PyPep8
+        try:
+            await self._handle(q)
+        except:
+            logger.exception('Unhandled exception')
+            # noinspection PyBroadException,PyPep8
+            try:
+                q.page.drop()
+                # TODO replace this with a custom-designed error display
+                q.page['__unhandled_error__'] = markdown_card(
+                    box='1 1 12 10',
+                    title='Error',
+                    content=f'```\n{traceback.format_exc()}\n```',
+                )
+                await q.page.save()
+            except:
+                logger.exception('Failed transmitting unhandled exception')
+
+
+    async def _handle(self, route, q):
+        handler = self._routes.get(route)
+        await handler(q)
+
+
+    def __call__(self, route: str, mode=None, on_startup: Optional[Callable] = None,
+            on_shutdown: Optional[Callable] = None):
+
+        def wrap(handle: HandleAsync):
+            self.setup(route, handle, mode, on_startup, on_shutdown)
+            return handle
+
+        return wrap
+
+
+class WaveServer:
+    _server = None
+    _apps = []
+
+    @classmethod
+    def run(cls, no_reload=True):
+        if not cls._server:
+            cls._server = cls()
+        cls._server.run(no_reload=no_reload)
+
+    @classmethod
+    def register(cls, app):
+        if app not in cls._apps:
+            cls._apps.append(app)
+
+
+    def __init__(self):
         self._routes = []
-        self._app = None
+        self._server = None
         self._startup = []
 
         with importlib.resources.path('wavegui', '__init__.py') as f:
@@ -84,8 +181,8 @@ class WaveApp:
         ]
         self._routes = routes
 
-    def init_app(self):
-        self._app = Starlette(debug=True, routes=self._routes, on_startup=self._startup)
+    def init_server(self):
+        self._server = Starlette(debug=True, routes=self._routes, on_startup=self._startup)
 
     def homepage(self, request):
         with open(os.path.join(self._www_dir, 'index.html'), 'r') as f:
@@ -101,12 +198,12 @@ class WaveApp:
         await client.handle()
 
     async def __call__(self, scope, receive, send):
-        return await self._app(scope, receive, send)
+        return await self._server(scope, receive, send)
 
     def run(self, no_reload=True):
         port = _scan_free_port()
         sys.path.insert(0, '.')
         addr = f'http://{_localhost}:{port}'
         self.init_routes()
-        self.init_app()
+        self.init_server()
         uvicorn.run(self, host=_localhost, port=port, reload=not no_reload)

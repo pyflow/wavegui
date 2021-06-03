@@ -27,8 +27,7 @@ from typing import Dict, Tuple, Callable, Any, Awaitable, Optional
 from urllib.parse import urlparse
 
 
-from .core import Expando, expando_to_dict, marshal, _content_type_json, AsyncSite, UNICAST, \
-    MULTICAST
+from .core import Expando, AsyncSite, UNICAST, MULTICAST
 
 logger = logging.getLogger(__name__)
 
@@ -68,9 +67,6 @@ class Query:
             auth: Auth,
             client_id: str,
             route: str,
-            app_state: Expando,
-            user_state: Expando,
-            client_state: Expando,
             args: Expando,
             events: Expando,
     ):
@@ -79,12 +75,6 @@ class Query:
         self.site = site
         """A reference to the current site."""
         self.page = site[f'/{client_id}' if mode == UNICAST else f'/{auth.subject}' if mode == MULTICAST else route]
-        """A reference to the current page."""
-        self.app = app_state
-        """A `h2o_wave.core.Expando` instance to hold application-specific state."""
-        self.user = user_state
-        """A `h2o_wave.core.Expando` instance to hold user-specific state."""
-        self.client = client_state
         """An `h2o_wave.core.Expando` instance to hold client-specific state."""
         self.args = args
         """A `h2o_wave.core.Expando` instance containing arguments from the active request."""
