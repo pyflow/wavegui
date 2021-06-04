@@ -13,13 +13,24 @@
 # limitations under the License.
 
 import json
-import secrets
 import warnings
 import logging
 import os
 import os.path
 import sys
-from typing import List, Dict, Union, Tuple, Any, Optional
+from typing import List, Dict, Union, Tuple, Any, Tuple, Callable, Awaitable, Optional
+import os
+import asyncio
+from concurrent.futures import Executor
+
+try:
+    import contextvars  # Python 3.7+ only.
+except ImportError:
+    contextvars = None
+
+import logging
+import functools
+
 
 
 logger = logging.getLogger(__name__)
@@ -33,6 +44,27 @@ BROADCAST = 'broadcast'
 
 _key_sep = ' '
 _content_type_json = {'Content-type': 'application/json'}
+
+def _noop(): pass
+
+
+class Auth:
+    """
+    Represents authentication information for a given query context. Carries valid information only if single sign on is enabled.
+    """
+
+    def __init__(self, username: str, subject: str, access_token: str, refresh_token: str):
+        self.username = username
+        """The username of the user."""
+        self.subject = subject
+        """A unique identifier for the user."""
+        self.access_token = access_token
+        """The access token of the user."""
+        self.refresh_token = refresh_token
+        """The refresh token of the user."""
+
+
+
 
 
 def _is_int(x: Any) -> bool: return isinstance(x, int)
@@ -447,45 +479,6 @@ class PageBase:
         self._track(dict(k=key))
 
 
-class Page(PageBase):
-    """
-    Represents a reference to a remote Wave page.
-
-    Args:
-        site: The parent site.
-        url: The URL of this page.
-    """
-
-    def __init__(self, site: 'Site', url: str):
-        self.site = site
-        super().__init__(url)
-
-    def load(self) -> dict:
-        """
-        Retrieve the serialized form of this page from the remote site.
-
-        Returns:
-            The serialized form of this page
-        """
-        return self.site.load(self.url)
-
-    def sync(self):
-        """
-        DEPRECATED: Use `h2o_wave.core.Page.save` instead.
-        """
-        warnings.warn('page.sync() is deprecated. Please use page.save() instead.', DeprecationWarning)
-        self.save()
-
-    def save(self):
-        """
-        Save the page. Sends all local changes made to this page to the remote site.
-        """
-        p = self._diff()
-        if p:
-            logger.debug(data)
-            self.site._save(self.url, p)
-
-
 class AsyncPage(PageBase):
     """
     Represents a reference to a remote Wave page. Similar to `h2o_wave.core.Page` except that this class exposes ``async`` methods.
@@ -496,7 +489,7 @@ class AsyncPage(PageBase):
         url: The URL of this page.
     """
 
-    def __init__(self, site: 'AsyncSite', url: str):
+    def __init__(self, site, url: str):
         self.site = site
         super().__init__(url)
 
@@ -509,13 +502,6 @@ class AsyncPage(PageBase):
         """
         return await self.site.load(self.url)
 
-    async def push(self):
-        """
-        DEPRECATED: Use `h2o_wave.core.AsyncPage.save` instead.
-        """
-        warnings.warn('page.push() is deprecated. Please use page.save() instead.', DeprecationWarning)
-        await self.save()
-
     async def save(self):
         """
         Save the page. Sends all local changes made to this page to the remote site.
@@ -524,185 +510,6 @@ class AsyncPage(PageBase):
         if p:
             logger.debug(p)
             await self.site._save(self.url, p)
-
-
-class Site:
-    """
-    Represents a reference to the remote Wave site. A Site instance is used to obtain references to the site's pages.
-    """
-
-    def __init__(self):
-        self._http = None
-
-    def __getitem__(self, url) -> Page:
-        return Page(self, url)
-
-    def __delitem__(self, key: str):
-        page = self[key]
-        page.drop()
-
-    def _save(self, url: str, patch: str):
-        return
-        res = self._http.patch(f'{_config.hub_address}{url}', content=patch)
-        if res.status_code != 200:
-            raise ServiceError(f'Request failed (code={res.status_code}): {res.text}')
-
-    def load(self, url) -> dict:
-        """
-        Retrieve data at the given URL, typically the serialized form of a page.
-
-        Args:
-            url: The URL to read.
-
-        Returns:
-            The serialized page.
-        """
-        res = self._http.get(f'{_config.hub_address}{url}', headers=_content_type_json)
-        if res.status_code != 200:
-            raise ServiceError(f'Request failed (code={res.status_code}): {res.text}')
-        return res.json()
-
-    def upload(self, files: List[str]) -> List[str]:
-        """
-        Upload local files to the site.
-
-        Args:
-            files: A list of file paths of the files to be uploaded..
-
-        Returns:
-            A list of remote URLs for the uploaded files, in order.
-        """
-        upload_url = f'{_config.hub_address}/_f'
-        res = self._http.post(upload_url, files=[('files', (os.path.basename(f), open(f, 'rb'))) for f in files])
-        if res.status_code == 200:
-            return json.loads(res.text)['files']
-        raise ServiceError(f'Upload failed (code={res.status_code}): {res.text}')
-
-    def download(self, url: str, path: str) -> str:
-        """
-        Download a file from the site.
-
-        Args:
-            url: The URL of the file.
-            path: The local directory or file path to download to. If a directory is provided, the original name of the file is retained.
-
-        Returns:
-            The path to the downloaded file.
-        """
-        path = os.path.abspath(path)
-        # If path is a directory, get basename from url
-        filepath = os.path.join(path, os.path.basename(url)) if os.path.isdir(path) else path
-
-        with open(filepath, 'wb') as f:
-            with self._http.stream('GET', f'{_config.hub_address}{url}') as r:
-                for chunk in r.iter_bytes():
-                    f.write(chunk)
-
-        return filepath
-
-    def unload(self, url: str):
-        """
-        Delete an uploaded file from the site.
-
-        Args:
-            url: The URL of the file to delete.
-        """
-        res = self._http.delete(f'{_config.hub_address}{url}')
-        if res.status_code == 200:
-            return
-        raise ServiceError(f'Unload failed (code={res.status_code}): {res.text}')
-
-
-site = Site()
-
-
-class AsyncSite:
-    """
-    Represents a reference to the remote Wave site. Similar to `h2o_wave.core.Site` except that this class exposes `async` methods.
-    """
-
-    def __init__(self):
-        self._http = None
-
-    def __getitem__(self, url) -> AsyncPage:
-        return AsyncPage(self, url)
-
-    def __delitem__(self, key: str):
-        page = self[key]
-        page.drop()
-
-    async def _save(self, url: str, patch: str):
-        res = await self._http.patch(f'{_config.hub_address}{url}', content=patch)
-        if res.status_code != 200:
-            raise ServiceError(f'Request failed (code={res.status_code}): {res.text}')
-
-    async def load(self, url) -> dict:
-        """
-        Retrieve data at the given URL, typically the serialized form of a page.
-
-        Args:
-            url: The URL to read.
-
-        Returns:
-            The serialized page.
-        """
-        res = await self._http.get(f'{_config.hub_address}{url}', headers=_content_type_json)
-        if res.status_code != 200:
-            raise ServiceError(f'Request failed (code={res.status_code}): {res.text}')
-        return res.json()
-
-    async def upload(self, files: List[str]) -> List[str]:
-        """
-        Upload local files to the site.
-
-        Args:
-            files: A list of file paths of the files to be uploaded..
-
-        Returns:
-            A list of remote URLs for the uploaded files, in order.
-        """
-        upload_url = f'{_config.hub_address}/_f'
-        res = await self._http.post(upload_url, files=[('files', (os.path.basename(f), open(f, 'rb'))) for f in files])
-        if res.status_code == 200:
-            return json.loads(res.text)['files']
-        raise ServiceError(f'Upload failed (code={res.status_code}): {res.text}')
-
-    async def download(self, url: str, path: str) -> str:
-        """
-        Download a file from the site.
-
-        Args:
-            url: The URL of the file.
-            path: The local directory or file path to download to. If a directory is provided, the original name of the file is retained.
-        Returns:
-            The path to the downloaded file.
-        """
-        path = os.path.abspath(path)
-        # If path is a directory, get basename from url
-        filepath = os.path.join(path, os.path.basename(url)) if os.path.isdir(path) else path
-
-        with open(filepath, 'wb') as f:
-            async with self._http.stream('GET', f'{_config.hub_address}{url}') as r:
-                async for chunk in r.aiter_bytes():
-                    f.write(chunk)
-
-        return filepath
-
-    async def unload(self, url: str):
-        """
-        Delete an uploaded file from the site.
-
-        Args:
-            url: The URL of the file to delete.
-        """
-        res = await self._http.delete(f'{_config.hub_address}{url}')
-        if res.status_code == 200:
-            return
-        raise ServiceError(f'Unload failed (code={res.status_code}): {res.text}')
-
-
-def _kv(key: str, index: str, value: Any):
-    return dict(k=key, v=value) if index is None or index == '' else dict(k=key, i=index, v=value)
 
 
 def marshal(d: Any) -> str:
@@ -741,3 +548,100 @@ def pack(data: Any) -> str:
     The object or value compressed into a string.
     """
     return 'data:' + marshal(_dump(data))
+
+
+class Query:
+    """
+    Represents the query context.
+    The query context is passed to the `@app` handler function whenever a query
+    arrives from the browser (page load, user interaction events, etc.).
+    The query context contains useful information about the query, including arguments
+    `args` (equivalent to URL query strings) and app-level, user-level and client-level state.
+    """
+
+    def __init__(
+            self,
+            mode: str,
+            auth: Auth,
+            page: AsyncPage,
+            client_id: str,
+            route: str,
+            args: Expando,
+            events: Expando,
+    ):
+        self.mode = mode
+        """The server mode. One of `'unicast'` (default),`'multicast'` or `'broadcast'`."""
+        """A reference to the current site."""
+        self.page = page
+        """An `h2o_wave.core.Expando` instance to hold client-specific state."""
+        self.args = args
+        """A `h2o_wave.core.Expando` instance containing arguments from the active request."""
+        self.events = events
+        """A `h2o_wave.core.Expando` instance containing events from the active request."""
+        self.username = auth.username
+        """The username of the user who initiated the active request. (DEPRECATED: Use q.auth.username instead)"""
+        self.route = route
+        """The route served by the server."""
+        self.auth = auth
+        """The authentication / authorization details of the user who initiated this query."""
+
+    async def sleep(self, delay: float, result=None) -> Any:
+        """
+        Suspend execution for the specified number of seconds.
+        Always use `q.sleep()` instead of `time.sleep()` in Wave apps.
+
+        Args:
+            delay: Number of seconds to sleep.
+            result: Result to return after delay, if any.
+
+        Returns:
+            The `result` argument, if any, as is.
+        """
+        return await asyncio.sleep(delay, result)
+
+    async def exec(self, executor: Optional[Executor], func: Callable, *args: Any, **kwargs: Any) -> Any:
+        """
+        Execute a function in the background using the specified executor.
+
+        To execute a function in-process, use `q.run()`.
+
+        Args:
+            executor: The executor to be used. If None, executes the function in-process.
+            func: The function to to be called.
+            args: Arguments to be passed to the function.
+            kwargs: Keywords arguments to be passed to the function.
+        Returns:
+            The result of the function call.
+        """
+        if asyncio.iscoroutinefunction(func):
+            return await func(*args, **kwargs)
+
+        loop = asyncio.get_event_loop()
+
+        if contextvars is not None:  # Python 3.7+ only.
+            return await loop.run_in_executor(
+                executor,
+                contextvars.copy_context().run,
+                functools.partial(func, *args, **kwargs)
+            )
+
+        if kwargs:
+            return await loop.run_in_executor(executor, functools.partial(func, *args, **kwargs))
+
+        return await loop.run_in_executor(executor, func, *args)
+
+    async def run(self, func: Callable, *args: Any, **kwargs: Any) -> Any:
+        """
+        Execute a function in the background, in-process.
+
+        Equivalent to calling `q.exec()` without an executor.
+
+        Args:
+            func: The function to to be called.
+            args: Arguments to be passed to the function.
+            kwargs: Keywords arguments to be passed to the function.
+
+        Returns:
+            The result of the function call.
+        """
+        return await self.exec(None, func, *args, **kwargs)

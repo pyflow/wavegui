@@ -13,8 +13,8 @@ import importlib.resources
 import traceback
 import logging
 import json
-from .server import Query
-from .core import AsyncSite, UNICAST, Expando
+from .core import Query
+from .core import UNICAST, Expando
 from .ui import markdown_card
 
 HandleAsync = Callable[[Query], Awaitable[Any]]
@@ -87,7 +87,6 @@ class WaveApp:
     def __init__(self):
         self._mode = None
         self._routes = {}
-        self._site: AsyncSite = AsyncSite()
         self._startup = []
         self._shutdown = []
 
@@ -104,7 +103,6 @@ class WaveApp:
         args = req.json()
         events_state: Optional[dict] = args.get('', None)
         q = Query(
-            site=self._site,
             mode=self._mode,
             auth=req.client.auth,
             client_id=req.client.client_id,
