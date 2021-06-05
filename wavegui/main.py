@@ -13,9 +13,9 @@ import importlib.resources
 import traceback
 import logging
 import json
-from .core import Query
-from .core import UNICAST, Expando
+from .core import Query, UNICAST, Expando, random_id, Session, User, AsyncSite
 from .ui import markdown_card
+from datetime import datetime
 
 HandleAsync = Callable[[Query], Awaitable[Any]]
 
@@ -29,7 +29,6 @@ def _scan_free_port(port: int = 8000):
             if sock.connect_ex((_localhost, port)):
                 return port
         port += 1
-
 
 
 class ClientRequest:
@@ -65,20 +64,22 @@ class ClientRequest:
     async def send_text(self, text):
         await self.websocket.send_text(text)
 
+
 class WaveClient:
-    def __init__(self, websocket):
+    def __init__(self, websocket, app):
         self.websocket = websocket
-        self.client_id = None
-        self.auth = None
+        self.app = app
 
     async def handle(self):
         websocket = self.websocket
+        await websocket.accept()
         while True:
             text = await websocket.receive_text()
             req = ClientRequest.load(self, text)
             if req in [ClientRequest.invalid_request, ClientRequest.bad_request, None]:
                 continue
             print('client request:', req.action, req.addr, req.data)
+            await self.app.process(req)
             await websocket.send_text('{"m":{"u":"anon","e":false}}')
             await websocket.send_text('{"e":"not_found"}')
 
@@ -86,6 +87,7 @@ class WaveClient:
 class WaveApp:
     def __init__(self):
         self._mode = None
+        self._base_url = ''
         self._routes = {}
         self._startup = []
         self._shutdown = []
@@ -102,10 +104,11 @@ class WaveApp:
     async def process(self, req):
         args = req.json()
         events_state: Optional[dict] = args.get('', None)
+        session = Session()
+        user = User()
         q = Query(
-            mode=self._mode,
-            auth=req.client.auth,
-            client_id=req.client.client_id,
+            session = session,
+            user = user,
             route=self._route,
             args=Expando(args),
             events=Expando(events_state),
@@ -191,8 +194,7 @@ class WaveServer:
         return FileResponse(os.path.join(self._www_dir, name))
 
     async def handle_ws(self, websocket):
-        await websocket.accept()
-        client = WaveClient(websocket)
+        client = WaveClient(websocket, self._apps[0])
         await client.handle()
 
     async def __call__(self, scope, receive, send):

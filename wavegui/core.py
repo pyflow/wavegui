@@ -22,6 +22,9 @@ from typing import List, Dict, Union, Tuple, Any, Tuple, Callable, Awaitable, Op
 import os
 import asyncio
 from concurrent.futures import Executor
+import string
+import random
+from datetime import datetime
 
 try:
     import contextvars  # Python 3.7+ only.
@@ -39,33 +42,11 @@ Primitive = Union[bool, str, int, float, None]
 PrimitiveCollection = Union[Tuple[Primitive], List[Primitive]]
 
 UNICAST = 'unicast'
-MULTICAST = 'multicast'
-BROADCAST = 'broadcast'
 
 _key_sep = ' '
 _content_type_json = {'Content-type': 'application/json'}
 
 def _noop(): pass
-
-
-class Auth:
-    """
-    Represents authentication information for a given query context. Carries valid information only if single sign on is enabled.
-    """
-
-    def __init__(self, username: str, subject: str, access_token: str, refresh_token: str):
-        self.username = username
-        """The username of the user."""
-        self.subject = subject
-        """A unique identifier for the user."""
-        self.access_token = access_token
-        """The access token of the user."""
-        self.refresh_token = refresh_token
-        """The refresh token of the user."""
-
-
-
-
 
 def _is_int(x: Any) -> bool: return isinstance(x, int)
 
@@ -157,6 +138,35 @@ class Expando:
 
     def __str__(self): return ', '.join([f'{k}:{repr(v)}' for k, v in self.__dict__[DICT].items()])
 
+    def to_dict(self):
+        return self.__dict__[DICT]
+
+    def copy(self, target, exclude_keys: Optional[Union[list, tuple]] = None,
+                 include_keys: Optional[Union[list, tuple]] = None):
+        if include_keys:
+            if exclude_keys:
+                for k in include_keys:
+                    if k not in exclude_keys:
+                        target[k] = self[k]
+            else:
+                for k in include_keys:
+                    target[k] = self[k]
+        else:
+            d = self.to_dict()
+            if exclude_keys:
+                for k, v in d.items():
+                    if k not in exclude_keys:
+                        target[k] = v
+            else:
+                for k, v in d.items():
+                    target[k] = v
+
+        return target
+
+    def clone(self, exclude_keys: Optional[Union[list, tuple]] = None,
+                  include_keys: Optional[Union[list, tuple]] = None):
+        return self.copy(Expando(), exclude_keys, include_keys)
+
 
 def expando_to_dict(e: Expando) -> dict:
     """
@@ -201,25 +211,7 @@ def copy_expando(source: Expando, target: Expando, exclude_keys: Optional[Union[
     Returns:
         The target expando.
     """
-    if include_keys:
-        if exclude_keys:
-            for k in include_keys:
-                if k not in exclude_keys:
-                    target[k] = source[k]
-        else:
-            for k in include_keys:
-                target[k] = source[k]
-    else:
-        d = expando_to_dict(source)
-        if exclude_keys:
-            for k, v in d.items():
-                if k not in exclude_keys:
-                    target[k] = v
-        else:
-            for k, v in d.items():
-                target[k] = v
-
-    return target
+    return source.copy(target, exclude_keys=exclude_keys, include_keys=include_keys)
 
 
 PAGE = '__page__'
@@ -478,6 +470,23 @@ class PageBase:
         _guard_str_key(key)
         self._track(dict(k=key))
 
+class AsyncSite:
+    def __init__(self):
+        self._queue = asyncio.Queue()
+        self.pages = {}
+
+    def __getitem__(self, url):
+        return AsyncPage(self, url)
+
+    def __delitem__(self, key: str):
+        page = self[key]
+        page.drop()
+
+    async def save(self, url: str, patch: str):
+        await self._queue.put(dict(url=url, patch=patch))
+
+    async def load(self, url) -> dict:
+        return self.pages.get(url, {})
 
 class AsyncPage(PageBase):
     """
@@ -509,7 +518,7 @@ class AsyncPage(PageBase):
         p = self._diff()
         if p:
             logger.debug(p)
-            await self.site._save(self.url, p)
+            await self.site.save(self.url, p)
 
 
 def marshal(d: Any) -> str:
@@ -549,6 +558,38 @@ def pack(data: Any) -> str:
     """
     return 'data:' + marshal(_dump(data))
 
+def random_id(prefix="", length=12):
+    assert len(prefix) == 2
+    raw_id = ''.join([random.choice('23456789' + string.ascii_uppercase) for i in range(length)])
+    return f"{prefix}{raw_id}"
+
+class SessionStore:
+    _stores = {}
+    @classmethod
+    def get(cls, session_id):
+        if session_id not in cls._stores:
+            store = cls(session_id)
+            cls._stores[session_id] = store
+        return cls._stores[session_id]
+
+    def __init__(self, session_id):
+        self.session_id = session_id
+        self.session_start = datetime.now()
+        self.site = AsyncSite()
+
+    def page(self, route):
+        return self.site[route]
+
+class User:
+    def __init__(self, user_id=None, user_name="anon"):
+        self.user_id = user_id or 'CU{}'.format('X'*14)
+        self.user_name = user_name
+
+class Session:
+    def __init__(self, session_id = None, **kwargs):
+        self.session_id = session_id or random_id('CS', 16)
+        self.client_id = ''
+        self.session_store = SessionStore.get(self.session_id)
 
 class Query:
     """
@@ -561,29 +602,20 @@ class Query:
 
     def __init__(
             self,
-            mode: str,
-            auth: Auth,
-            page: AsyncPage,
-            client_id: str,
+            user: User,
+            session: Session,
             route: str,
             args: Expando,
             events: Expando,
     ):
-        self.mode = mode
-        """The server mode. One of `'unicast'` (default),`'multicast'` or `'broadcast'`."""
-        """A reference to the current site."""
-        self.page = page
-        """An `h2o_wave.core.Expando` instance to hold client-specific state."""
+        self.mode = "unicast"
+        """The server mode. Only `'unicast'` supported."""
+        self.page = session.session_store.page(route)
         self.args = args
-        """A `h2o_wave.core.Expando` instance containing arguments from the active request."""
         self.events = events
-        """A `h2o_wave.core.Expando` instance containing events from the active request."""
-        self.username = auth.username
-        """The username of the user who initiated the active request. (DEPRECATED: Use q.auth.username instead)"""
+        self.user = user
         self.route = route
-        """The route served by the server."""
-        self.auth = auth
-        """The authentication / authorization details of the user who initiated this query."""
+        self.session = session
 
     async def sleep(self, delay: float, result=None) -> Any:
         """
