@@ -13,9 +13,11 @@ import importlib.resources
 import traceback
 import logging
 import json
-from .core import Query, UNICAST, Expando, random_id, Session, User, AsyncSite
+import asyncio
+from .core import Query, UNICAST, Expando, random_id, Session, User
 from .ui import markdown_card
 from datetime import datetime
+from .exception import NoHandlerException
 
 HandleAsync = Callable[[Query], Awaitable[Any]]
 
@@ -59,6 +61,8 @@ class ClientRequest:
         self.client = client
 
     def json(self):
+        if not self.data:
+            return {}
         return json.loads(self.data)
 
     async def send_text(self, text):
@@ -69,20 +73,71 @@ class WaveClient:
     def __init__(self, websocket, app):
         self.websocket = websocket
         self.app = app
+        self.q = None
+        self.sync_task = None
+        self.quit = False
+        self.user = None
+        self.session = None
+        self.page_route = None
 
     async def handle(self):
         websocket = self.websocket
         await websocket.accept()
-        while True:
+        while not self.quit:
             text = await websocket.receive_text()
             req = ClientRequest.load(self, text)
             if req in [ClientRequest.invalid_request, ClientRequest.bad_request, None]:
                 continue
             print('client request:', req.action, req.addr, req.data)
-            await self.app.process(req)
-            await websocket.send_text('{"m":{"u":"anon","e":false}}')
-            await websocket.send_text('{"e":"not_found"}')
+            await self.process(req)
+            if req.action == 'watch':
+                self.page_route = req.addr
+            if self.q != None and self.sync_task == None and self.page_route != None:
+                self.sync_task = asyncio.create_task(self.page_sync())
+            #await websocket.send_text('{"m":{"u":"anon","e":false}}')
 
+    async def page_sync(self):
+        assert self.q != None
+        page = self.session.page(self.page_route)
+        page_data = await page.start_sync()
+        if page_data:
+            await self.websocket.send_text(json.dumps(page_data))
+        while not self.quit:
+            data = await page.changes()
+            await self.websocket.send_text(json.dumps(data))
+
+    async def process(self, req):
+        args = req.json()
+        events_state: Optional[dict] = args.get('', None)
+        self.session = Session()
+        self.user = User()
+        q = Query(
+            session = self.session,
+            user = self.user,
+            route = req.addr,
+            args = Expando(args),
+            events = Expando(events_state),
+        )
+        self.q = q
+        # noinspection PyBroadException,PyPep8
+        try:
+            await self.app.handle(req.addr, q)
+        except NoHandlerException:
+            await self.websocket.send_text('{"e":"not_found"}')
+        except:
+            logger.exception('Unhandled exception')
+            # noinspection PyBroadException,PyPep8
+            try:
+                q.page.drop()
+                # TODO replace this with a custom-designed error display
+                q.page['__unhandled_error__'] = markdown_card(
+                    box='1 1 12 10',
+                    title='Error',
+                    content=f'```\n{traceback.format_exc()}\n```',
+                )
+                await q.page.save()
+            except:
+                logger.exception('Failed transmitting unhandled exception')
 
 class WaveApp:
     def __init__(self):
@@ -101,39 +156,10 @@ class WaveApp:
     def run(self, no_reload=True):
         WaveServer.run(no_reload=no_reload)
 
-    async def process(self, req):
-        args = req.json()
-        events_state: Optional[dict] = args.get('', None)
-        session = Session()
-        user = User()
-        q = Query(
-            session = session,
-            user = user,
-            route=self._route,
-            args=Expando(args),
-            events=Expando(events_state),
-        )
-        # noinspection PyBroadException,PyPep8
-        try:
-            await self._handle(q)
-        except:
-            logger.exception('Unhandled exception')
-            # noinspection PyBroadException,PyPep8
-            try:
-                q.page.drop()
-                # TODO replace this with a custom-designed error display
-                q.page['__unhandled_error__'] = markdown_card(
-                    box='1 1 12 10',
-                    title='Error',
-                    content=f'```\n{traceback.format_exc()}\n```',
-                )
-                await q.page.save()
-            except:
-                logger.exception('Failed transmitting unhandled exception')
-
-
-    async def _handle(self, route, q):
+    async def handle(self, route, q):
         handler = self._routes.get(route)
+        if handler == None:
+            raise NoHandlerException(f'No handler for {route} registered.')
         await handler(q)
 
 
@@ -155,7 +181,7 @@ class WaveServer:
     def run(cls, no_reload=True):
         if not cls._server:
             cls._server = cls()
-        cls._server.run(no_reload=no_reload)
+        cls._server.run_forever(no_reload=no_reload)
 
     @classmethod
     def register(cls, app):
@@ -174,12 +200,16 @@ class WaveServer:
 
 
     def init_routes(self):
-        routes = [
+        routes = []
+        for app in self._apps:
+            for route in app._routes:
+                routes.append(Route(route, self.homepage))
+        routes.extend([
             Route('/', self.homepage),
             WebSocketRoute('/_s', self.handle_ws),
             Mount('/static', StaticFiles(directory=self._static_dir)),
-            Route('/{filename}', self.home_file),
-        ]
+            Route('/{filename}', self.home_file)
+            ])
         self._routes = routes
 
     def init_server(self):
@@ -200,7 +230,7 @@ class WaveServer:
     async def __call__(self, scope, receive, send):
         return await self._server(scope, receive, send)
 
-    def run(self, no_reload=True):
+    def run_forever(self, no_reload=True):
         port = _scan_free_port()
         sys.path.insert(0, '.')
         addr = f'http://{_localhost}:{port}'

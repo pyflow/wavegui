@@ -401,6 +401,7 @@ class PageBase:
 
     def __init__(self, url: str):
         self.url = url
+        self.data = {}
         self._changes = []
 
     def add(self, key: str, card: Any) -> Ref:
@@ -449,8 +450,8 @@ class PageBase:
     def _diff(self):
         if len(self._changes) == 0:
             return None
-        d = marshal(dict(d=self._changes))
-        self._changes.clear()
+        d = dict(d=self._changes)
+        self._changes = []
         return d
 
     def drop(self):
@@ -470,55 +471,45 @@ class PageBase:
         _guard_str_key(key)
         self._track(dict(k=key))
 
-class AsyncSite:
-    def __init__(self):
-        self._queue = asyncio.Queue()
-        self.pages = {}
-
-    def __getitem__(self, url):
-        return AsyncPage(self, url)
-
-    def __delitem__(self, key: str):
-        page = self[key]
-        page.drop()
-
-    async def save(self, url: str, patch: str):
-        await self._queue.put(dict(url=url, patch=patch))
-
-    async def load(self, url) -> dict:
-        return self.pages.get(url, {})
 
 class AsyncPage(PageBase):
-    """
-    Represents a reference to a remote Wave page. Similar to `h2o_wave.core.Page` except that this class exposes ``async`` methods.
 
-
-    Args:
-        site: The parent site.
-        url: The URL of this page.
-    """
-
-    def __init__(self, site, url: str):
-        self.site = site
+    def __init__(self, container, url: str):
+        self.container = container
+        self._queue = asyncio.Queue(maxsize=1000)
+        self._lock = asyncio.Lock()
         super().__init__(url)
-
-    async def load(self) -> dict:
-        """
-        Retrieve the serialized form of this page from the remote site.
-
-        Returns:
-            The serialized form of this page
-        """
-        return await self.site.load(self.url)
 
     async def save(self):
         """
-        Save the page. Sends all local changes made to this page to the remote site.
         """
         p = self._diff()
         if p:
             logger.debug(p)
-            await self.site.save(self.url, p)
+            await self._patch(p)
+
+    def _make_card(self, data, buf):
+        return {'d':data}
+
+    async def _patch(self, ops):
+        async with self._lock:
+            for op in ops.get('d', []):
+                if 'k' in op:
+                    if len(op['k']) > 0 and 'd' in op:
+                        self.data[op['k']] = self._make_card(op['d'], op.get('b', []))
+                else:
+                    self.container.pop(self.url, None)
+
+            await self._queue.put(ops)
+
+    async def start_sync(self):
+        async with self._lock:
+            page_data = self.data;
+            self._queue = asyncio.Queue(maxsize=1000)
+            return {'p':{'c':page_data}}
+
+    async def changes(self):
+        return await self._queue.get()
 
 
 def marshal(d: Any) -> str:
@@ -563,7 +554,7 @@ def random_id(prefix="", length=12):
     raw_id = ''.join([random.choice('23456789' + string.ascii_uppercase) for i in range(length)])
     return f"{prefix}{raw_id}"
 
-class SessionStore:
+class Session:
     _stores = {}
     @classmethod
     def get(cls, session_id):
@@ -572,24 +563,21 @@ class SessionStore:
             cls._stores[session_id] = store
         return cls._stores[session_id]
 
-    def __init__(self, session_id):
-        self.session_id = session_id
+    def __init__(self, session_id=None):
+        self.session_id = session_id or random_id('CS', 16)
         self.session_start = datetime.now()
-        self.site = AsyncSite()
+        self.pages = {}
 
     def page(self, route):
-        return self.site[route]
+        if route not in self.pages:
+            self.pages[route] = AsyncPage(self.pages, route)
+        return self.pages[route]
 
 class User:
     def __init__(self, user_id=None, user_name="anon"):
         self.user_id = user_id or 'CU{}'.format('X'*14)
         self.user_name = user_name
 
-class Session:
-    def __init__(self, session_id = None, **kwargs):
-        self.session_id = session_id or random_id('CS', 16)
-        self.client_id = ''
-        self.session_store = SessionStore.get(self.session_id)
 
 class Query:
     """
@@ -610,7 +598,7 @@ class Query:
     ):
         self.mode = "unicast"
         """The server mode. Only `'unicast'` supported."""
-        self.page = session.session_store.page(route)
+        self.page = session.page(route)
         self.args = args
         self.events = events
         self.user = user
