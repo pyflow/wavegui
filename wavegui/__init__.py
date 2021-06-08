@@ -1,7 +1,8 @@
 __version__ = '0.1.0'
 
-from .core import AsyncPage, Query, Ref, data, pack, Expando
+from .core import Ref, data, pack, Expando
 from .types import *
+from .session import AsyncPage, Query
 from .main import WaveApp
 
 app = WaveApp()

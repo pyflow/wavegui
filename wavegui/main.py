@@ -1,5 +1,7 @@
+import inspect
 from typing import Dict, Tuple, Callable, Any, Awaitable, Optional
-from starlette.websockets import WebSocket
+from starlette.websockets import WebSocket, WebSocketDisconnect
+from websockets.exceptions import WebSocketException
 import sys
 import socket
 from contextlib import closing
@@ -14,18 +16,19 @@ import traceback
 import logging
 import json
 import asyncio
-from .core import Query, UNICAST, Expando, random_id, Session, User
+from asyncio import CancelledError
+from .core import UNICAST, Expando
+from .session import Query, Session, User
 from .ui import markdown_card
-from datetime import datetime
-from .exception import NoHandlerException
+from .exception import NoHandlerException, RouteDuplicatedError, AppNotFoundException
+from .task import TaskManager
 
 HandleAsync = Callable[[Query], Awaitable[Any]]
-
-_localhost = '127.0.0.1'
 
 logger = logging.getLogger(__name__)
 
 def _scan_free_port(port: int = 8000):
+    _localhost = '127.0.0.1'
     while True:
         with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
             if sock.connect_ex((_localhost, port)):
@@ -65,65 +68,98 @@ class ClientRequest:
             return {}
         return json.loads(self.data)
 
-    async def send_text(self, text):
-        await self.websocket.send_text(text)
-
 
 class WaveClient:
-    def __init__(self, websocket, app):
+    def __init__(self, websocket):
         self.websocket = websocket
-        self.app = app
-        self.q = None
         self.sync_task = None
         self.quit = False
-        self.user = None
-        self.session = None
+        self.user = User()
+        self.session = Session()
         self.page_route = None
+        self.task_manager = TaskManager(name=self.session.session_id, pool_size=5)
 
     async def handle(self):
         websocket = self.websocket
         await websocket.accept()
+
         while not self.quit:
-            text = await websocket.receive_text()
+            try:
+                text = await websocket.receive_text()
+            except WebSocketDisconnect:
+                await self._close_sync_task()
+                await self.close()
+                return
+            except WebSocketException:
+                await self._close_sync_task()
+                await self.close()
+                return
+
             req = ClientRequest.load(self, text)
             if req in [ClientRequest.invalid_request, ClientRequest.bad_request, None]:
                 continue
-            print('client request:', req.action, req.addr, req.data)
-            await self.process(req)
             if req.action == 'watch':
                 self.page_route = req.addr
-            if self.q != None and self.sync_task == None and self.page_route != None:
-                self.sync_task = asyncio.create_task(self.page_sync())
-            #await websocket.send_text('{"m":{"u":"anon","e":false}}')
+                await self.task_manager.spawn(self.start_sync_task())
+
+            await self.process(req)
+
+    async def _close_sync_task(self):
+        if not self.sync_task:
+            return
+        try:
+            self.sync_task.cancel()
+            await asyncio.wait([self.sync_task], timeout=2)
+            self.sync_task = None
+        except CancelledError:
+            pass
+
+
+    async def start_sync_task(self):
+        if self.sync_task != None:
+            await self._close_sync_task()
+        if self.sync_task == None and self.page_route != None:
+            self.sync_task = asyncio.create_task(self.page_sync())
+
+    async def send_text(self, text):
+        try:
+            await self.websocket.send_text(text)
+        except WebSocketException:
+            await self.close()
+            return
+        except WebSocketDisconnect:
+            await self.close()
+            return
 
     async def page_sync(self):
-        assert self.q != None
+        assert self.session != None
         page = self.session.page(self.page_route)
         page_data = await page.start_sync()
         if page_data:
-            await self.websocket.send_text(json.dumps(page_data))
+            await self.send_text(json.dumps(page_data))
+
         while not self.quit:
             data = await page.changes()
-            await self.websocket.send_text(json.dumps(data))
+            await self.send_text(json.dumps(data))
+
 
     async def process(self, req):
         args = req.json()
         events_state: Optional[dict] = args.get('', None)
-        self.session = Session()
-        self.user = User()
         q = Query(
             session = self.session,
             user = self.user,
             route = req.addr,
             args = Expando(args),
             events = Expando(events_state),
+            task_manager = self.task_manager
         )
-        self.q = q
         # noinspection PyBroadException,PyPep8
         try:
-            await self.app.handle(req.addr, q)
+            app = WaveApp.get(req.addr)
+            await app.handle(req.addr, q)
         except NoHandlerException:
-            await self.websocket.send_text('{"e":"not_found"}')
+            await self.send_text('{"e":"not_found"}')
         except:
             logger.exception('Unhandled exception')
             # noinspection PyBroadException,PyPep8
@@ -139,7 +175,40 @@ class WaveClient:
             except:
                 logger.exception('Failed transmitting unhandled exception')
 
+    async def close(self):
+        try:
+            self.quit = True
+            await self.websocket.close()
+        except Exception as ex:
+            logger.debug('Exception when close, {ex}', ex=ex)
+
+        await self.task_manager.join(timeout=1)
+
 class WaveApp:
+    _apps = []
+    _app_routes = {}
+
+    @classmethod
+    def register(cls, app):
+        if app in cls._apps:
+            return
+        cls._apps.append(app)
+        for route in app._routes:
+            if route in cls._app_routes:
+                raise RouteDuplicatedError(f'Route {route} duplicated, registered twice.')
+            cls._app_routes[route] = app
+
+    @classmethod
+    def all(cls):
+        return cls._apps
+
+    @classmethod
+    def get(cls, route):
+        app = cls._app_routes.get(route, None)
+        if app == None:
+            raise AppNotFoundException(f'App for {route} not found.')
+        return app
+
     def __init__(self):
         self._mode = None
         self._base_url = ''
@@ -151,7 +220,7 @@ class WaveApp:
     def setup(self, route, handle, mode=None, on_startup=None, on_shutdown=None):
         self.mode = mode or UNICAST
         self._routes[route] = handle
-        WaveServer.register(self)
+        WaveApp.register(self)
 
     def run(self, no_reload=True):
         WaveServer.run(no_reload=no_reload)
@@ -175,18 +244,12 @@ class WaveApp:
 
 class WaveServer:
     _server = None
-    _apps = []
 
     @classmethod
     def run(cls, no_reload=True):
         if not cls._server:
             cls._server = cls()
         cls._server.run_forever(no_reload=no_reload)
-
-    @classmethod
-    def register(cls, app):
-        if app not in cls._apps:
-            cls._apps.append(app)
 
 
     def __init__(self):
@@ -201,14 +264,16 @@ class WaveServer:
 
     def init_routes(self):
         routes = []
-        for app in self._apps:
+        for app in WaveApp.all():
             for route in app._routes:
                 routes.append(Route(route, self.homepage))
         routes.extend([
             Route('/', self.homepage),
             WebSocketRoute('/_s', self.handle_ws),
             Mount('/static', StaticFiles(directory=self._static_dir)),
-            Route('/{filename}', self.home_file)
+            Route('/manifest.json', self.home_file),
+            Route('/favicon.ico', self.home_file),
+            Route('/logo192.png', self.home_file)
             ])
         self._routes = routes
 
@@ -220,11 +285,11 @@ class WaveServer:
             return HTMLResponse(f.read())
 
     def home_file(self, request):
-        name = request.path_params['filename']
+        name = os.path.basename(request.url.path)
         return FileResponse(os.path.join(self._www_dir, name))
 
     async def handle_ws(self, websocket):
-        client = WaveClient(websocket, self._apps[0])
+        client = WaveClient(websocket)
         await client.handle()
 
     async def __call__(self, scope, receive, send):
@@ -233,7 +298,6 @@ class WaveServer:
     def run_forever(self, no_reload=True):
         port = _scan_free_port()
         sys.path.insert(0, '.')
-        addr = f'http://{_localhost}:{port}'
         self.init_routes()
         self.init_server()
-        uvicorn.run(self, host=_localhost, port=port, reload=not no_reload)
+        uvicorn.run(self, host='0.0.0.0', port=port, reload=not no_reload)
