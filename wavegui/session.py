@@ -76,13 +76,17 @@ class Session:
         self.session_id = session_id or random_id('CS', 16)
         self.session_start = datetime.now()
         self.pages = {}
+        self.user_data = Expando()
 
     def page(self, route):
         if route not in self.pages:
             self.pages[route] = AsyncPage(self.pages, route)
         return self.pages[route]
 
-class User:
+    def user(self):
+        return self.user_data
+
+class UserInfo:
     def __init__(self, user_id=None, user_name="anon"):
         self.user_id = user_id or 'CU{}'.format('X'*14)
         self.user_name = user_name
@@ -97,7 +101,7 @@ class Query:
 
     def __init__(
             self,
-            user: User,
+            user_info: UserInfo,
             session: Session,
             route: str,
             args: Expando,
@@ -108,9 +112,10 @@ class Query:
         self.page = session.page(route)
         self.args = args
         self.events = events
-        self.user = user
+        self.user_info = user_info
         self.route = route
         self.session = session
+        self.user = session.user()
         self.task_manager = task_manager
 
     async def sleep(self, delay: float, result=None) -> Any:

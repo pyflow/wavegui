@@ -1,2 +1,4 @@
 include wavegui/www/*
 include wavegui/www/static/*
+include wavegui/www/static/css/*
+include wavegui/www/static/js/*

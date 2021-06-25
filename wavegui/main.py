@@ -18,7 +18,7 @@ import json
 import asyncio
 from asyncio import CancelledError
 from .core import UNICAST, Expando
-from .session import Query, Session, User
+from .session import Query, Session, UserInfo
 from .ui import markdown_card
 from .exception import NoHandlerException, RouteDuplicatedError, AppNotFoundException
 from .task import TaskManager
@@ -74,7 +74,7 @@ class WaveClient:
         self.websocket = websocket
         self.sync_task = None
         self.quit = False
-        self.user = User()
+        self.user_info = UserInfo()
         self.session = Session()
         self.page_route = None
         self.task_manager = TaskManager(name=self.session.session_id, pool_size=5)
@@ -148,7 +148,7 @@ class WaveClient:
         events_state: Optional[dict] = args.get('', None)
         q = Query(
             session = self.session,
-            user = self.user,
+            user_info = self.user_info,
             route = req.addr,
             args = Expando(args),
             events = Expando(events_state),
