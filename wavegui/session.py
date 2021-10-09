@@ -58,11 +58,6 @@ class AsyncPage(PageBase):
     async def changes(self):
         return await self._queue.get()
 
-def random_id(prefix="", length=12):
-    assert len(prefix) == 2
-    raw_id = ''.join([random.choice('23456789' + string.ascii_uppercase) for i in range(length)])
-    return f"{prefix}{raw_id}"
-
 class Session:
     _stores = {}
     @classmethod
@@ -72,8 +67,8 @@ class Session:
             cls._stores[session_id] = store
         return cls._stores[session_id]
 
-    def __init__(self, session_id=None):
-        self.session_id = session_id or random_id('CS', 16)
+    def __init__(self, session_id):
+        self.session_id = session_id
         self.session_start = datetime.now()
         self.pages = {}
         self.user_data = Expando()
@@ -87,9 +82,9 @@ class Session:
         return self.user_data
 
 class UserInfo:
-    def __init__(self, user_id=None, user_name="anon"):
-        self.user_id = user_id or 'CU{}'.format('X'*14)
-        self.user_name = user_name
+    def __init__(self, user_id=None, user_name=None):
+        self.user_id = user_id or 'WU{}'.format('X'*14)
+        self.user_name = user_name or 'anon'
 
 
 class Query:

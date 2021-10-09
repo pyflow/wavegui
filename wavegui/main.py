@@ -8,6 +8,8 @@ from contextlib import closing
 import uvicorn
 import os
 from starlette.applications import Starlette
+from starlette.middleware import Middleware
+from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import PlainTextResponse, HTMLResponse, FileResponse
 from starlette.routing import Route, Mount, WebSocketRoute
 from starlette.staticfiles import StaticFiles
@@ -17,6 +19,7 @@ import logging
 import json
 import asyncio
 from asyncio import CancelledError
+from .utils import IDGenerator
 from .core import UNICAST, Expando
 from .session import Query, Session, UserInfo
 from .ui import markdown_card
@@ -66,7 +69,10 @@ class ClientRequest:
     def json(self):
         if not self.data:
             return {}
-        return json.loads(self.data)
+        try:
+            return json.loads(self.data)
+        except:
+            return {'#': self.data}
 
 
 class WaveClient:
@@ -75,7 +81,8 @@ class WaveClient:
         self.sync_task = None
         self.quit = False
         self.user_info = UserInfo()
-        self.session = Session()
+        session_id = websocket.scope.get('session', {}).get('session_id', None) or IDGenerator.create_session_id()
+        self.session = Session(session_id=session_id)
         self.page_route = None
         self.task_manager = TaskManager(name=self.session.session_id, pool_size=5)
 
@@ -187,6 +194,9 @@ class WaveClient:
 class WaveApp:
     _apps = []
     _app_routes = {}
+    _session_config = dict(secret_key="wavegui_secret",
+            session_cookie ="wave-session",
+            max_age=86400*14, same_site="lax", https_only=False)
 
     @classmethod
     def register(cls, app):
@@ -197,6 +207,11 @@ class WaveApp:
             if route in cls._app_routes:
                 raise RouteDuplicatedError(f'Route {route} duplicated, registered twice.')
             cls._app_routes[route] = app
+    
+    @classmethod
+    def get_middlewares(cls):
+        return [Middleware(SessionMiddleware, **cls._session_config)]
+
 
     @classmethod
     def all(cls):
@@ -221,6 +236,14 @@ class WaveApp:
         self.mode = mode or UNICAST
         self._routes[route] = handle
         WaveApp.register(self)
+    
+    @classmethod
+    def config_session(cls, max_age: 86400*14, session_cookie="", secret_key=""):
+        cls._session_config['max_age'] = max_age
+        if session_cookie:
+            cls._session_config['session_cookie'] = session_cookie
+        if secret_key:
+            cls._session_config['secret_key'] = secret_key
 
     def run(self, no_reload=True):
         WaveServer.run(no_reload=no_reload)
@@ -278,9 +301,13 @@ class WaveServer:
         self._routes = routes
 
     def init_server(self):
-        self._server = Starlette(debug=True, routes=self._routes, on_startup=self._startup)
+        middleware = []
+        middleware.extend(WaveApp.get_middlewares())
+        self._server = Starlette(debug=True, routes=self._routes, middleware=middleware, on_startup=self._startup)
 
     def homepage(self, request):
+        if 'session_id' not in request.session:
+           request.session['session_id'] = IDGenerator.create_session_id()
         with open(os.path.join(self._www_dir, 'index.html'), 'r') as f:
             return HTMLResponse(f.read())
 

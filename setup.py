@@ -29,8 +29,10 @@ setup(
     zip_safe=False,
     platforms='any',
     install_requires=['basepy>=0.3.4',
-        'starlette==0.13.8',
-        'uvicorn[standard]==0.12.2'
+        'starlette>=0.13.8',
+        'uvicorn[standard]>=0.12.2',
+        'itsdangerous',
+        'aiofiles'
         ],
     extras_require={
         'test': [
