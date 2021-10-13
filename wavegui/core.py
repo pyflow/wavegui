@@ -13,24 +13,51 @@
 # limitations under the License.
 
 import json
+import secrets
+import warnings
 import logging
-import sys
-from typing import List, Dict, Union, Tuple, Any, Tuple, Callable, Awaitable, Optional
 import os
-import logging
+import os.path
+import sys
+from typing import List, Dict, Union, Tuple, Any, Optional, IO
 
+import httpx
 
 logger = logging.getLogger(__name__)
 
 Primitive = Union[bool, str, int, float, None]
 PrimitiveCollection = Union[Tuple[Primitive], List[Primitive]]
+FileContent = Union[IO[str], IO[bytes], str, bytes]
 
 UNICAST = 'unicast'
+MULTICAST = 'multicast'
+BROADCAST = 'broadcast'
+
+
+def _get_env(key: str, value: Any):
+    return os.environ.get(f'H2O_WAVE_{key}', value)
+
+
+_default_internal_address = 'http://127.0.0.1:8000'
+
+
+class _Config:
+    def __init__(self):
+        self.internal_address = _get_env('INTERNAL_ADDRESS', _default_internal_address)
+        self.app_address = _get_env('APP_ADDRESS', _get_env('EXTERNAL_ADDRESS', self.internal_address))
+        self.app_mode = _get_env('APP_MODE', UNICAST)
+        self.hub_address = _get_env('ADDRESS', 'http://127.0.0.1:10101')
+        self.hub_access_key_id: str = _get_env('ACCESS_KEY_ID', 'access_key_id')
+        self.hub_access_key_secret: str = _get_env('ACCESS_KEY_SECRET', 'access_key_secret')
+        self.app_access_key_id: str = _get_env('APP_ACCESS_KEY_ID', None) or secrets.token_urlsafe(16)
+        self.app_access_key_secret: str = _get_env('APP_ACCESS_KEY_SECRET', None) or secrets.token_urlsafe(16)
+
+
+_config = _Config()
 
 _key_sep = ' '
 _content_type_json = {'Content-type': 'application/json'}
 
-def _noop(): pass
 
 def _is_int(x: Any) -> bool: return isinstance(x, int)
 
@@ -122,35 +149,6 @@ class Expando:
 
     def __str__(self): return ', '.join([f'{k}:{repr(v)}' for k, v in self.__dict__[DICT].items()])
 
-    def to_dict(self):
-        return self.__dict__[DICT]
-
-    def copy(self, target, exclude_keys: Optional[Union[list, tuple]] = None,
-                 include_keys: Optional[Union[list, tuple]] = None):
-        if include_keys:
-            if exclude_keys:
-                for k in include_keys:
-                    if k not in exclude_keys:
-                        target[k] = self[k]
-            else:
-                for k in include_keys:
-                    target[k] = self[k]
-        else:
-            d = self.to_dict()
-            if exclude_keys:
-                for k, v in d.items():
-                    if k not in exclude_keys:
-                        target[k] = v
-            else:
-                for k, v in d.items():
-                    target[k] = v
-
-        return target
-
-    def clone(self, exclude_keys: Optional[Union[list, tuple]] = None,
-                  include_keys: Optional[Union[list, tuple]] = None):
-        return self.copy(Expando(), exclude_keys, include_keys)
-
 
 def expando_to_dict(e: Expando) -> dict:
     """
@@ -195,7 +193,25 @@ def copy_expando(source: Expando, target: Expando, exclude_keys: Optional[Union[
     Returns:
         The target expando.
     """
-    return source.copy(target, exclude_keys=exclude_keys, include_keys=include_keys)
+    if include_keys:
+        if exclude_keys:
+            for k in include_keys:
+                if k not in exclude_keys:
+                    target[k] = source[k]
+        else:
+            for k in include_keys:
+                target[k] = source[k]
+    else:
+        d = expando_to_dict(source)
+        if exclude_keys:
+            for k, v in d.items():
+                if k not in exclude_keys:
+                    target[k] = v
+        else:
+            for k, v in d.items():
+                target[k] = v
+
+    return target
 
 
 PAGE = '__page__'
@@ -375,6 +391,62 @@ def data(
     return Data(fields, size, rows)
 
 
+class _ServerCacheBase:
+    def _keys(self, text: str) -> List[str]:
+        content = text.strip()
+        if len(content):
+            return content.split('\n')
+        return []
+
+
+class _AsyncServerCache(_ServerCacheBase):
+    def __init__(self):
+        self._http = httpx.AsyncClient(
+            auth=(_config.hub_access_key_id, _config.hub_access_key_secret),
+            verify=False,
+        )
+
+    async def get(self, shard: str, key: str, default=None) -> Any:
+        res = await self._http.get(f'{_config.hub_address}/_c/{shard}/{key}')
+        if res.status_code == 200:
+            return json.loads(res.text)
+        return default
+
+    async def keys(self, shard: str) -> List[str]:
+        res = await self._http.get(f'{_config.hub_address}/_c/{shard}')
+        return self._keys(res.text) if res.status_code == 200 else []
+
+    async def set(self, shard: str, key: str, value: Any):
+        content = json.dumps(value)
+        res = await self._http.put(f'{_config.hub_address}/_c/{shard}/{key}', content=content)
+        if res.status_code != 200:
+            raise ServiceError(f'Request failed (code={res.status_code}): {res.text}')
+
+
+class _ServerCache(_ServerCacheBase):
+    def __init__(self):
+        self._http = httpx.Client(
+            auth=(_config.hub_access_key_id, _config.hub_access_key_secret),
+            verify=False,
+        )
+
+    def get(self, shard: str, key: str, default=None):
+        res = self._http.get(f'{_config.hub_address}/_c/{shard}/{key}')
+        if res.status_code == 200:
+            return json.loads(res.text)
+        return default
+
+    def keys(self, shard: str) -> List[str]:
+        res = self._http.get(f'{_config.hub_address}/_c/{shard}')
+        return self._keys(res.text) if res.status_code == 200 else []
+
+    def set(self, shard: str, key: str, value: Any):
+        content = json.dumps(value)
+        res = self._http.put(f'{_config.hub_address}/_c/{shard}/{key}', content=content)
+        if res.status_code != 200:
+            raise ServiceError(f'Request failed (code={res.status_code}): {res.text}')
+
+
 class PageBase:
     """
     Represents a remote page.
@@ -385,7 +457,6 @@ class PageBase:
 
     def __init__(self, url: str):
         self.url = url
-        self.data = {}
         self._changes = []
 
     def add(self, key: str, card: Any) -> Ref:
@@ -434,8 +505,8 @@ class PageBase:
     def _diff(self):
         if len(self._changes) == 0:
             return None
-        d = dict(d=self._changes)
-        self._changes = []
+        d = marshal(dict(d=self._changes))
+        self._changes.clear()
         return d
 
     def drop(self):
@@ -454,6 +525,341 @@ class PageBase:
     def __delitem__(self, key: str):
         _guard_str_key(key)
         self._track(dict(k=key))
+
+
+class Page(PageBase):
+    """
+    Represents a reference to a remote Wave page.
+
+    Args:
+        site: The parent site.
+        url: The URL of this page.
+    """
+
+    def __init__(self, site: 'Site', url: str):
+        self.site = site
+        super().__init__(url)
+
+    def load(self) -> dict:
+        """
+        Retrieve the serialized form of this page from the remote site.
+
+        Returns:
+            The serialized form of this page
+        """
+        return self.site.load(self.url)
+
+    def sync(self):
+        """
+        DEPRECATED: Use `h2o_wave.core.Page.save` instead.
+        """
+        warnings.warn('page.sync() is deprecated. Please use page.save() instead.', DeprecationWarning)
+        self.save()
+
+    def save(self):
+        """
+        Save the page. Sends all local changes made to this page to the remote site.
+        """
+        p = self._diff()
+        if p:
+            logger.debug(data)
+            self.site._save(self.url, p)
+
+
+class AsyncPage(PageBase):
+    """
+    Represents a reference to a remote Wave page. Similar to `h2o_wave.core.Page` except that this class exposes ``async`` methods.
+
+
+    Args:
+        site: The parent site.
+        url: The URL of this page.
+    """
+
+    def __init__(self, site: 'AsyncSite', url: str):
+        self.site = site
+        super().__init__(url)
+
+    async def load(self) -> dict:
+        """
+        Retrieve the serialized form of this page from the remote site.
+
+        Returns:
+            The serialized form of this page
+        """
+        return await self.site.load(self.url)
+
+    async def push(self):
+        """
+        DEPRECATED: Use `h2o_wave.core.AsyncPage.save` instead.
+        """
+        warnings.warn('page.push() is deprecated. Please use page.save() instead.', DeprecationWarning)
+        await self.save()
+
+    async def save(self):
+        """
+        Save the page. Sends all local changes made to this page to the remote site.
+        """
+        p = self._diff()
+        if p:
+            logger.debug(p)
+            await self.site._save(self.url, p)
+
+
+class Site:
+    """
+    Represents a reference to the remote Wave site. A Site instance is used to obtain references to the site's pages.
+    """
+
+    def __init__(self):
+        self._http = httpx.Client(
+            auth=(_config.hub_access_key_id, _config.hub_access_key_secret),
+            verify=False,
+        )
+
+    def __getitem__(self, url) -> Page:
+        return Page(self, url)
+
+    def __delitem__(self, key: str):
+        page = self[key]
+        page.drop()
+
+    def _save(self, url: str, patch: str):
+        res = self._http.patch(f'{_config.hub_address}{url}', content=patch)
+        if res.status_code != 200:
+            raise ServiceError(f'Request failed (code={res.status_code}): {res.text}')
+
+    def load(self, url) -> dict:
+        """
+        Retrieve data at the given URL, typically the serialized form of a page.
+
+        Args:
+            url: The URL to read.
+
+        Returns:
+            The serialized page.
+        """
+        res = self._http.get(f'{_config.hub_address}{url}', headers=_content_type_json)
+        if res.status_code != 200:
+            raise ServiceError(f'Request failed (code={res.status_code}): {res.text}')
+        return res.json()
+
+    def upload(self, files: List[str]) -> List[str]:
+        """
+        Upload local files to the site.
+
+        Args:
+            files: A list of file paths of the files to be uploaded..
+
+        Returns:
+            A list of remote URLs for the uploaded files, in order.
+        """
+        upload_url = f'{_config.hub_address}/_f'
+        res = self._http.post(upload_url, files=[('files', (os.path.basename(f), open(f, 'rb'))) for f in files])
+        if res.status_code == 200:
+            return json.loads(res.text)['files']
+        raise ServiceError(f'Upload failed (code={res.status_code}): {res.text}')
+
+    def download(self, url: str, path: str) -> str:
+        """
+        Download a file from the site.
+
+        Args:
+            url: The URL of the file.
+            path: The local directory or file path to download to. If a directory is provided, the original name of the file is retained.
+
+        Returns:
+            The path to the downloaded file.
+        """
+        path = os.path.abspath(path)
+        # If path is a directory, get basename from url
+        filepath = os.path.join(path, os.path.basename(url)) if os.path.isdir(path) else path
+
+        with open(filepath, 'wb') as f:
+            with self._http.stream('GET', f'{_config.hub_address}{url}') as r:
+                for chunk in r.iter_bytes():
+                    f.write(chunk)
+
+        return filepath
+
+    def unload(self, url: str):
+        """
+        Delete an uploaded file from the site.
+
+        Args:
+            url: The URL of the file to delete.
+        """
+        res = self._http.delete(f'{_config.hub_address}{url}')
+        if res.status_code == 200:
+            return
+        raise ServiceError(f'Unload failed (code={res.status_code}): {res.text}')
+
+    def uplink(self, path: str, content_type: str, file: FileContent) -> str:
+        """
+        Create or update a stream of images.
+
+        The typical use of this function is to transmit a stream of images to a web page, providing the appearance of a
+         video. The path returned by this function can be passed to ui.image() or ui.image_card() (or even a custom HTML
+         img element). The stream is displayed in browsers using multipart/x-mixed-replace content. Callers must call
+         the unlink() function to signal end-of-stream.
+
+        Args:
+            path: a unique path or name for the stream (e.g. 'foo/bar/qux.png'). Must be a valid URL path.
+            content_type: The MIME type of the streamed content (e.g. 'image/jpeg', 'image/png', etc.).
+            file: A file or file-like object (on-disk file, standard I/O, in-memory buffers, sockets or pipes).
+
+        Returns:
+            The stream endpoint, typically used as an image path.
+        """
+        endpoint = f'/_m/{path}'
+        res = self._http.post(f'{_config.hub_address}{endpoint}', files={'f': ('f', file, content_type)})
+        if res.status_code == 200:
+            return endpoint
+        raise ServiceError(f'Uplink failed (code={res.status_code}): {res.text}')
+
+    def unlink(self, path: str):
+        """
+        Signal the end of a stream.
+
+        Args:
+            path: The path of the stream
+        """
+        endpoint = f'/_m/{path}'
+        res = self._http.delete(f'{_config.hub_address}{endpoint}')
+        if res.status_code == 200:
+            return endpoint
+        raise ServiceError(f'Unlink failed (code={res.status_code}): {res.text}')
+
+
+site = Site()
+
+
+class AsyncSite:
+    """
+    Represents a reference to the remote Wave site. Similar to `h2o_wave.core.Site` except that this class exposes `async` methods.
+    """
+
+    def __init__(self):
+        self._http = httpx.AsyncClient(
+            auth=(_config.hub_access_key_id, _config.hub_access_key_secret),
+            verify=False,
+        )
+
+    def __getitem__(self, url) -> AsyncPage:
+        return AsyncPage(self, url)
+
+    def __delitem__(self, key: str):
+        page = self[key]
+        page.drop()
+
+    async def _save(self, url: str, patch: str):
+        res = await self._http.patch(f'{_config.hub_address}{url}', content=patch)
+        if res.status_code != 200:
+            raise ServiceError(f'Request failed (code={res.status_code}): {res.text}')
+
+    async def load(self, url) -> dict:
+        """
+        Retrieve data at the given URL, typically the serialized form of a page.
+
+        Args:
+            url: The URL to read.
+
+        Returns:
+            The serialized page.
+        """
+        res = await self._http.get(f'{_config.hub_address}{url}', headers=_content_type_json)
+        if res.status_code != 200:
+            raise ServiceError(f'Request failed (code={res.status_code}): {res.text}')
+        return res.json()
+
+    async def upload(self, files: List[str]) -> List[str]:
+        """
+        Upload local files to the site.
+
+        Args:
+            files: A list of file paths of the files to be uploaded..
+
+        Returns:
+            A list of remote URLs for the uploaded files, in order.
+        """
+        upload_url = f'{_config.hub_address}/_f'
+        res = await self._http.post(upload_url, files=[('files', (os.path.basename(f), open(f, 'rb'))) for f in files])
+        if res.status_code == 200:
+            return json.loads(res.text)['files']
+        raise ServiceError(f'Upload failed (code={res.status_code}): {res.text}')
+
+    async def download(self, url: str, path: str) -> str:
+        """
+        Download a file from the site.
+
+        Args:
+            url: The URL of the file.
+            path: The local directory or file path to download to. If a directory is provided, the original name of the file is retained.
+        Returns:
+            The path to the downloaded file.
+        """
+        path = os.path.abspath(path)
+        # If path is a directory, get basename from url
+        filepath = os.path.join(path, os.path.basename(url)) if os.path.isdir(path) else path
+
+        with open(filepath, 'wb') as f:
+            async with self._http.stream('GET', f'{_config.hub_address}{url}') as r:
+                async for chunk in r.aiter_bytes():
+                    f.write(chunk)
+
+        return filepath
+
+    async def unload(self, url: str):
+        """
+        Delete an uploaded file from the site.
+
+        Args:
+            url: The URL of the file to delete.
+        """
+        res = await self._http.delete(f'{_config.hub_address}{url}')
+        if res.status_code == 200:
+            return
+        raise ServiceError(f'Unload failed (code={res.status_code}): {res.text}')
+
+    async def uplink(self, path: str, content_type: str, file: FileContent) -> str:
+        """
+        Create or update a stream of images.
+
+        The typical use of this function is to transmit a stream of images to a web page, providing the appearance of a
+         video. The path returned by this function can be passed to ui.image() or ui.image_card() (or even a custom HTML
+         img element). The stream is displayed in browsers using multipart/x-mixed-replace content. Callers must call
+         the unlink() function to signal end-of-stream.
+
+        Args:
+            path: a unique path or name for the stream (e.g. 'foo/bar/qux.png'). Must be a valid URL path.
+            content_type: The MIME type of the streamed content (e.g. 'image/jpeg', 'image/png', etc.).
+            file: A file or file-like object (on-disk file, standard I/O, in-memory buffers, sockets or pipes).
+
+        Returns:
+            The stream endpoint, typically used as an image path.
+        """
+        endpoint = f'/_m/{path}'
+        res = await self._http.post(f'{_config.hub_address}{endpoint}', files={'f': ('f', file, content_type)})
+        if res.status_code == 200:
+            return endpoint
+        raise ServiceError(f'Uplink failed (code={res.status_code}): {res.text}')
+
+    async def unlink(self, path: str):
+        """
+        Signal the end of a stream.
+
+        Args:
+            path: The path of the stream
+        """
+        endpoint = f'/_m/{path}'
+        res = await self._http.delete(f'{_config.hub_address}{endpoint}')
+        if res.status_code == 200:
+            return endpoint
+        raise ServiceError(f'Unlink failed (code={res.status_code}): {res.text}')
+
+
+def _kv(key: str, index: str, value: Any):
+    return dict(k=key, v=value) if index is None or index == '' else dict(k=key, i=index, v=value)
 
 
 def marshal(d: Any) -> str:
