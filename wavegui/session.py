@@ -7,6 +7,7 @@ import string
 import random
 from datetime import datetime
 from .core import PageBase, Expando
+import json
 
 try:
     import contextvars  # Python 3.7+ only.
@@ -18,19 +19,26 @@ import functools
 
 logger = logging.getLogger(__name__)
 
-
 class AsyncPage(PageBase):
 
     def __init__(self, container, url: str):
         self.container = container
         self._queue = asyncio.Queue(maxsize=1000)
         self._lock = asyncio.Lock()
+        self.data = {}
         super().__init__(url)
+
+    def _get_diff(self):
+        if len(self._changes) == 0:
+            return None
+        d = dict(d=self._changes)
+        self._changes = []
+        return d
 
     async def save(self):
         """
         """
-        p = self._diff()
+        p = self._get_diff()
         if p:
             logger.debug(p)
             await self._patch(p)

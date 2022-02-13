@@ -1,22 +1,37 @@
 {
   "files": {
-    "main.css": "/static/css/main.1f812b39.chunk.css",
-    "main.js": "/static/js/main.cc2a4da7.chunk.js",
-    "main.js.map": "/static/js/main.cc2a4da7.chunk.js.map",
-    "runtime-main.js": "/static/js/runtime-main.113e4396.js",
-    "runtime-main.js.map": "/static/js/runtime-main.113e4396.js.map",
-    "static/js/2.bb9b4a0b.chunk.js": "/static/js/2.bb9b4a0b.chunk.js",
-    "static/js/2.bb9b4a0b.chunk.js.map": "/static/js/2.bb9b4a0b.chunk.js.map",
-    "index.html": "/index.html",
-    "precache-manifest.e91b0c603cffb4149df8d9a881714258.js": "/precache-manifest.e91b0c603cffb4149df8d9a881714258.js",
-    "service-worker.js": "/service-worker.js",
-    "static/css/main.1f812b39.chunk.css.map": "/static/css/main.1f812b39.chunk.css.map",
-    "static/js/2.bb9b4a0b.chunk.js.LICENSE.txt": "/static/js/2.bb9b4a0b.chunk.js.LICENSE.txt"
+    "main.css": "static/css/main.76d38cc7.chunk.css",
+    "main.js": "static/js/main.dd923b3a.chunk.js",
+    "runtime-main.js": "static/js/runtime-main.fe03ed80.js",
+    "static/js/2.da5fc48e.chunk.js": "static/js/2.da5fc48e.chunk.js",
+    "fonts/icons/fabric-icons-0-467ee27f.woff": "fonts/icons/fabric-icons-0-467ee27f.woff",
+    "fonts/icons/fabric-icons-1-4d521695.woff": "fonts/icons/fabric-icons-1-4d521695.woff",
+    "fonts/icons/fabric-icons-10-c4ded8e4.woff": "fonts/icons/fabric-icons-10-c4ded8e4.woff",
+    "fonts/icons/fabric-icons-11-2a8393d6.woff": "fonts/icons/fabric-icons-11-2a8393d6.woff",
+    "fonts/icons/fabric-icons-12-7e945a1e.woff": "fonts/icons/fabric-icons-12-7e945a1e.woff",
+    "fonts/icons/fabric-icons-13-c3989a02.woff": "fonts/icons/fabric-icons-13-c3989a02.woff",
+    "fonts/icons/fabric-icons-14-5cf58db8.woff": "fonts/icons/fabric-icons-14-5cf58db8.woff",
+    "fonts/icons/fabric-icons-15-3807251b.woff": "fonts/icons/fabric-icons-15-3807251b.woff",
+    "fonts/icons/fabric-icons-16-9cf93f3b.woff": "fonts/icons/fabric-icons-16-9cf93f3b.woff",
+    "fonts/icons/fabric-icons-17-0c4ed701.woff": "fonts/icons/fabric-icons-17-0c4ed701.woff",
+    "fonts/icons/fabric-icons-2-63c99abf.woff": "fonts/icons/fabric-icons-2-63c99abf.woff",
+    "fonts/icons/fabric-icons-3-089e217a.woff": "fonts/icons/fabric-icons-3-089e217a.woff",
+    "fonts/icons/fabric-icons-4-a656cc0a.woff": "fonts/icons/fabric-icons-4-a656cc0a.woff",
+    "fonts/icons/fabric-icons-5-f95ba260.woff": "fonts/icons/fabric-icons-5-f95ba260.woff",
+    "fonts/icons/fabric-icons-6-ef6fd590.woff": "fonts/icons/fabric-icons-6-ef6fd590.woff",
+    "fonts/icons/fabric-icons-7-2b97bb99.woff": "fonts/icons/fabric-icons-7-2b97bb99.woff",
+    "fonts/icons/fabric-icons-8-6fdf1528.woff": "fonts/icons/fabric-icons-8-6fdf1528.woff",
+    "fonts/icons/fabric-icons-9-c6162b42.woff": "fonts/icons/fabric-icons-9-c6162b42.woff",
+    "fonts/icons/fabric-icons-a13498cf.woff": "fonts/icons/fabric-icons-a13498cf.woff",
+    "index.html": "index.html",
+    "precache-manifest.586ad9b1fa781a77da59e6fa5b1d7db9.js": "precache-manifest.586ad9b1fa781a77da59e6fa5b1d7db9.js",
+    "service-worker.js": "service-worker.js",
+    "static/js/2.da5fc48e.chunk.js.LICENSE.txt": "static/js/2.da5fc48e.chunk.js.LICENSE.txt"
   },
   "entrypoints": [
-    "static/js/runtime-main.113e4396.js",
-    "static/js/2.bb9b4a0b.chunk.js",
-    "static/css/main.1f812b39.chunk.css",
-    "static/js/main.cc2a4da7.chunk.js"
+    "static/js/runtime-main.fe03ed80.js",
+    "static/js/2.da5fc48e.chunk.js",
+    "static/css/main.76d38cc7.chunk.css",
+    "static/js/main.dd923b3a.chunk.js"
   ]
 }

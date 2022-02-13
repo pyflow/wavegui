@@ -37,7 +37,7 @@ class AsyncPool(object):
         except asyncio.TimeoutError:
             logger.error('timeout')
         except Exception as ex:
-            logger.error('exception: {ex}', ex=ex)
+            logger.error(f'exception: {ex}')
         finally:
             logger.debug("task completed, will release semaphor.")
             self.semaphore.release()

@@ -10,7 +10,7 @@ import os
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.sessions import SessionMiddleware
-from starlette.responses import PlainTextResponse, HTMLResponse, FileResponse
+from starlette.responses import PlainTextResponse, HTMLResponse, FileResponse, RedirectResponse
 from starlette.routing import Route, Mount, WebSocketRoute
 from starlette.staticfiles import StaticFiles
 import importlib.resources
@@ -187,7 +187,7 @@ class WaveClient:
             self.quit = True
             await self.websocket.close()
         except Exception as ex:
-            logger.debug('Exception when close, {ex}', ex=ex)
+            logger.debug(f'Exception when close, {ex}')
 
         await self.task_manager.join(timeout=1)
 
@@ -245,8 +245,8 @@ class WaveApp:
         if secret_key:
             cls._session_config['secret_key'] = secret_key
 
-    def run(self, no_reload=True):
-        WaveServer.run(no_reload=no_reload)
+    def run(self, no_reload=True, log_level="info"):
+        WaveServer.run(no_reload=no_reload, log_level=log_level)
 
     async def handle(self, route, q):
         handler = self._routes.get(route)
@@ -269,31 +269,37 @@ class WaveServer:
     _server = None
 
     @classmethod
-    def run(cls, no_reload=True):
+    def run(cls, no_reload=True, log_level="info"):
         if not cls._server:
             cls._server = cls()
-        cls._server.run_forever(no_reload=no_reload)
+        cls._server.run_forever(no_reload=no_reload, log_level=log_level)
 
 
     def __init__(self):
         self._routes = []
         self._server = None
         self._startup = []
+        self.default_route = ''
 
         with importlib.resources.path('wavegui', '__init__.py') as f:
             self._www_dir = os.path.join(os.path.dirname(f), 'www')
             self._static_dir = os.path.join(self._www_dir, 'static')
+            self._fonts_dir = os.path.join(self._www_dir, 'fonts')
 
 
     def init_routes(self):
+        self.default_route = ''
         routes = []
         for app in WaveApp.all():
             for route in app._routes:
-                routes.append(Route(route, self.homepage))
+                if not self.default_route:
+                    self.default_route = route
+                routes.append(Route(route, self.app_page))
         routes.extend([
             Route('/', self.homepage),
-            WebSocketRoute('/_s', self.handle_ws),
+            WebSocketRoute('/_s/', self.handle_ws),
             Mount('/static', StaticFiles(directory=self._static_dir)),
+            Mount('/fonts', StaticFiles(directory=self._fonts_dir)),
             Route('/manifest.json', self.home_file),
             Route('/favicon.ico', self.home_file),
             Route('/logo192.png', self.home_file)
@@ -306,6 +312,11 @@ class WaveServer:
         self._server = Starlette(debug=True, routes=self._routes, middleware=middleware, on_startup=self._startup)
 
     def homepage(self, request):
+        if 'session_id' not in request.session:
+           request.session['session_id'] = IDGenerator.create_session_id()
+        return RedirectResponse(url=self.default_route)
+    
+    def app_page(self, request):
         if 'session_id' not in request.session:
            request.session['session_id'] = IDGenerator.create_session_id()
         with open(os.path.join(self._www_dir, 'index.html'), 'r') as f:
@@ -322,9 +333,9 @@ class WaveServer:
     async def __call__(self, scope, receive, send):
         return await self._server(scope, receive, send)
 
-    def run_forever(self, no_reload=True):
+    def run_forever(self, no_reload=True, log_level="info"):
         port = _scan_free_port()
         sys.path.insert(0, '.')
         self.init_routes()
         self.init_server()
-        uvicorn.run(self, host='0.0.0.0', port=port, reload=not no_reload)
+        uvicorn.run(self, host='0.0.0.0', port=port, reload=not no_reload, log_level=log_level)
