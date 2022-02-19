@@ -148,6 +148,7 @@ class WaveClient:
         while not self.quit:
             data = await page.changes()
             await self.send_text(json.dumps(data))
+            page.send_done()
 
 
     async def process(self, req):

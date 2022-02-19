@@ -20,9 +20,7 @@ import functools
 logger = logging.getLogger(__name__)
 
 class AsyncPage(PageBase):
-
-    def __init__(self, container, url: str):
-        self.container = container
+    def __init__(self, url: str):
         self._queue = asyncio.Queue(maxsize=1000)
         self._lock = asyncio.Lock()
         self.data = {}
@@ -53,18 +51,21 @@ class AsyncPage(PageBase):
                     if len(op['k']) > 0 and 'd' in op:
                         self.data[op['k']] = self._make_card(op['d'], op.get('b', []))
                 else:
-                    self.container.pop(self.url, None)
-
-            await self._queue.put(ops)
+                    self.data = {}
+        await self._queue.put(ops)
 
     async def start_sync(self):
         async with self._lock:
             page_data = self.data;
-            self._queue = asyncio.Queue(maxsize=1000)
             return {'p':{'c':page_data}}
 
     async def changes(self):
-        return await self._queue.get()
+        data = await self._queue.get()
+        # self._queue.task_done()
+        return data
+    
+    def send_done(self):
+        self._queue.task_done()
 
 class Session:
     _stores = {}
@@ -83,16 +84,20 @@ class Session:
 
     def page(self, route):
         if route not in self.pages:
-            self.pages[route] = AsyncPage(self.pages, route)
+            self.pages[route] = AsyncPage(route)
         return self.pages[route]
 
+    @property
     def user(self):
         return self.user_data
 
 class UserInfo:
     def __init__(self, user_id=None, user_name=None):
-        self.user_id = user_id or 'WU{}'.format('X'*14)
+        self.user_id = user_id or 'WAVE_USER_ID'
         self.user_name = user_name or 'anon'
+    
+    def anonymouse(self):
+        return self.user_id == 'WAVE_USER_ID'
 
 
 class Query:
@@ -118,7 +123,7 @@ class Query:
         self.user_info = user_info
         self.route = route
         self.session = session
-        self.user = session.user()
+        self.user = session.user
         self.task_manager = task_manager
 
     async def sleep(self, delay: float, result=None) -> Any:
