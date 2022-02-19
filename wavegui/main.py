@@ -225,7 +225,7 @@ class WaveApp:
             raise AppNotFoundException(f'App for {route} not found.')
         return app
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         self._mode = None
         self._base_url = ''
         self._routes = {}
@@ -233,7 +233,7 @@ class WaveApp:
         self._shutdown = []
 
 
-    def setup(self, route, handle, mode=None, on_startup=None, on_shutdown=None):
+    def setup(self, route, handle, mode=None):
         self.mode = mode or UNICAST
         self._routes[route] = handle
         WaveApp.register(self)
@@ -246,7 +246,9 @@ class WaveApp:
         if secret_key:
             cls._session_config['secret_key'] = secret_key
 
-    def run(self, no_reload=True, log_level="info"):
+    def run(self, on_startup=[], on_shutdown=[], no_reload=True, log_level="info"):
+        self._startup.extend(on_startup)
+        self._shutdown.extend(on_shutdown)
         WaveServer.run(no_reload=no_reload, log_level=log_level)
 
     async def handle(self, route, q):
@@ -256,11 +258,10 @@ class WaveApp:
         await handler(q)
 
 
-    def __call__(self, route: str, mode=None, on_startup: Optional[Callable] = None,
-            on_shutdown: Optional[Callable] = None):
+    def __call__(self, route: str, mode=None):
 
         def wrap(handle: HandleAsync):
-            self.setup(route, handle, mode, on_startup, on_shutdown)
+            self.setup(route, handle, mode)
             return handle
 
         return wrap
@@ -280,6 +281,7 @@ class WaveServer:
         self._routes = []
         self._server = None
         self._startup = []
+        self._shutdown = []
         self.default_route = ''
 
         with importlib.resources.path('wavegui', '__init__.py') as f:
@@ -291,11 +293,15 @@ class WaveServer:
     def init_routes(self):
         self.default_route = ''
         routes = []
+        startup = []
+        shutdown = []
         for app in WaveApp.all():
             for route in app._routes:
                 if not self.default_route:
                     self.default_route = route
                 routes.append(Route(route, self.app_page))
+            startup.extend(app._startup)
+            shutdown.extend(app._shutdown)
         routes.extend([
             Route('/', self.homepage),
             WebSocketRoute('/_s/', self.handle_ws),
@@ -306,11 +312,14 @@ class WaveServer:
             Route('/logo192.png', self.home_file)
             ])
         self._routes = routes
+        self._startup = startup
+        self._shutdown = shutdown
 
     def init_server(self):
         middleware = []
         middleware.extend(WaveApp.get_middlewares())
-        self._server = Starlette(debug=True, routes=self._routes, middleware=middleware, on_startup=self._startup)
+        self._server = Starlette(debug=True, routes=self._routes, middleware=middleware, 
+            on_startup=self._startup, on_shutdown=self._shutdown)
 
     def homepage(self, request):
         if 'session_id' not in request.session:
