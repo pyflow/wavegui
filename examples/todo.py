@@ -77,4 +77,4 @@ async def new_todo(q: Q):
     await q.page.save()
 
 if __name__ == '__main__':
-    app.run(log_level="debug")
+    app.run()
