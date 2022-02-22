@@ -305,6 +305,7 @@ class WaveServer:
         routes.extend([
             Route('/', self.homepage),
             WebSocketRoute('/_s/', self.handle_ws),
+            Route('/_f/', self.handle_file),
             Mount('/static', StaticFiles(directory=self._static_dir)),
             Mount('/fonts', StaticFiles(directory=self._fonts_dir)),
             Route('/manifest.json', self.home_file),
@@ -339,6 +340,16 @@ class WaveServer:
     async def handle_ws(self, websocket):
         client = WaveClient(websocket)
         await client.handle()
+    
+    async def handle_file(self, request):
+        method  = request.method.lower()
+        if method == 'get':
+            pass
+        elif method == 'post':
+            form = await request.form()
+            files = form.get('files', [])
+        elif method == 'delete':
+            pass
 
     async def __call__(self, scope, receive, send):
         return await self._server(scope, receive, send)

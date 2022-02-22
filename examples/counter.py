@@ -34,4 +34,4 @@ async def counter(q: Q):
 
 
 if __name__ == '__main__':
-    app.run(log_level="debug")
+    app.run()
