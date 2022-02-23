@@ -10,7 +10,7 @@ def make_link_list(links):
 
 @app('/upload')
 async def upload(q: Q):
-    print(q.args)
+    print('upload', q)
     if q.args.user_files:
         q.page['example'].items = [
             ui.text_xl('Files uploaded!'),

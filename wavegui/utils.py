@@ -23,3 +23,9 @@ class IDGenerator(object):
     def create_session_id(cls):
         generated = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(10))
         return 'WS{}{}'.format(cls.format_ts(), generated)
+    
+    @classmethod
+    def create_file_id(cls):
+        generated = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20))
+        gid = 'UP{}{}'.format(cls.format_ts(), generated)
+        return gid.lower()

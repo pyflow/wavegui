@@ -10,7 +10,7 @@ import os
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.sessions import SessionMiddleware
-from starlette.responses import PlainTextResponse, HTMLResponse, FileResponse, RedirectResponse
+from starlette.responses import PlainTextResponse, JSONResponse, HTMLResponse, FileResponse, RedirectResponse
 from starlette.routing import Route, Mount, WebSocketRoute
 from starlette.staticfiles import StaticFiles
 import importlib.resources
@@ -22,9 +22,11 @@ from asyncio import CancelledError
 from .utils import IDGenerator
 from .core import UNICAST, Expando
 from .session import Query, Session, UserInfo
-from .ui import markdown_card
+from .ui import facepile, markdown_card
 from .exception import NoHandlerException, RouteDuplicatedError, AppNotFoundException
 from .task import TaskManager
+import aiofiles
+import aiofiles.os
 
 HandleAsync = Callable[[Query], Awaitable[Any]]
 
@@ -50,7 +52,7 @@ class ClientRequest:
     }
     @classmethod
     def load(cls, client, msg):
-        parts = msg.split(' ', 3)
+        parts = msg.split(' ', 2)
         if len(parts) != 3:
             return cls.bad_request
         t, addr, data = parts[0], parts[1], parts[2]
@@ -232,7 +234,6 @@ class WaveApp:
         self._startup = []
         self._shutdown = []
 
-
     def setup(self, route, handle, mode=None):
         self.mode = mode or UNICAST
         self._routes[route] = handle
@@ -271,18 +272,23 @@ class WaveServer:
     _server = None
 
     @classmethod
-    def run(cls, no_reload=True, log_level="info"):
+    def run(cls, init_options=None, no_reload=True, log_level="info"):
         if not cls._server:
-            cls._server = cls()
+            kwargs = init_options or {}
+            cls._server = cls(**kwargs)
         cls._server.run_forever(no_reload=no_reload, log_level=log_level)
 
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         self._routes = []
         self._server = None
         self._startup = []
         self._shutdown = []
         self.default_route = ''
+        self._upload_dir = kwargs.get('upload_dir') or os.path.abspath('./data/uploads')
+        if not os.path.exists(self._upload_dir):
+            os.makedirs(self._upload_dir, exist_ok=True)
+
 
         with importlib.resources.path('wavegui', '__init__.py') as f:
             self._www_dir = os.path.join(os.path.dirname(f), 'www')
@@ -305,7 +311,7 @@ class WaveServer:
         routes.extend([
             Route('/', self.homepage),
             WebSocketRoute('/_s/', self.handle_ws),
-            Route('/_f/', self.handle_file),
+            Route('/_f/', self.handle_file, methods=["GET", "POST", "DELETE"]),
             Mount('/static', StaticFiles(directory=self._static_dir)),
             Mount('/fonts', StaticFiles(directory=self._fonts_dir)),
             Route('/manifest.json', self.home_file),
@@ -344,12 +350,32 @@ class WaveServer:
     async def handle_file(self, request):
         method  = request.method.lower()
         if method == 'get':
-            pass
+            relative_path = request.url.path.removeprefix('/_f/')
+            file_path = os.path.join(self._upload_dir, relative_path)
+            return FileResponse(file_path)
         elif method == 'post':
             form = await request.form()
-            files = form.get('files', [])
+            files = form.getlist('files')
+            uploaded_paths = []
+            for uf in files:
+                basename = os.path.basename(uf.filename)
+                uid = IDGenerator.create_file_id()
+                file_dir = os.path.join(self._upload_dir, uid)
+                await aiofiles.os.makedirs(file_dir)
+                file_path = os.path.join(file_dir, basename)
+                contents = await uf.read()
+                async with aiofiles.open(file_path, mode='wb') as f:
+                    await f.write(contents)
+                await uf.close()
+                uploaded_paths.append(f'/_f/{uid}/{basename}')   
+            return JSONResponse({"files":uploaded_paths})
+
+
         elif method == 'delete':
-            pass
+            relative_path = request.url.path.removeprefix('/_f/')
+            file_path = os.path.join(self._upload_dir, relative_path)
+            await aiofiles.os.remove(file_path)
+            return PlainTextResponse('')
 
     async def __call__(self, scope, receive, send):
         return await self._server(scope, receive, send)

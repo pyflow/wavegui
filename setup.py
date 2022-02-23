@@ -32,7 +32,8 @@ setup(
         'starlette>=0.13.8',
         'uvicorn[standard]>=0.12.2',
         'itsdangerous',
-        'aiofiles'
+        'aiofiles',
+        'python-multipart'
         ],
     extras_require={
         'test': [
