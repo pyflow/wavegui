@@ -8,6 +8,7 @@ from contextlib import closing
 import uvicorn
 import os
 from starlette.applications import Starlette
+from starlette.exceptions import HTTPException
 from starlette.middleware import Middleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import PlainTextResponse, JSONResponse, HTMLResponse, FileResponse, RedirectResponse
@@ -19,7 +20,7 @@ import logging
 import json
 import asyncio
 from asyncio import CancelledError
-from .utils import IDGenerator
+from .utils import IDGenerator, sanitize
 from .core import UNICAST, Expando
 from .session import Query, Session, UserInfo
 from .ui import facepile, markdown_card
@@ -311,7 +312,8 @@ class WaveServer:
         routes.extend([
             Route('/', self.homepage),
             WebSocketRoute('/_s/', self.handle_ws),
-            Route('/_f/', self.handle_file, methods=["GET", "POST", "DELETE"]),
+            Route('/_f/', self.handle_file_upload, methods=["POST"]),
+            Route('/_f/{file_path:path}', self.handle_file, methods=["GET", "DELETE"]),
             Mount('/static', StaticFiles(directory=self._static_dir)),
             Mount('/fonts', StaticFiles(directory=self._fonts_dir)),
             Route('/manifest.json', self.home_file),
@@ -349,33 +351,34 @@ class WaveServer:
     
     async def handle_file(self, request):
         method  = request.method.lower()
+        relative_path = request.path_params['file_path']
         if method == 'get':
-            relative_path = request.url.path.removeprefix('/_f/')
             file_path = os.path.join(self._upload_dir, relative_path)
             return FileResponse(file_path)
-        elif method == 'post':
-            form = await request.form()
-            files = form.getlist('files')
-            uploaded_paths = []
-            for uf in files:
-                basename = os.path.basename(uf.filename)
-                uid = IDGenerator.create_file_id()
-                file_dir = os.path.join(self._upload_dir, uid)
-                await aiofiles.os.makedirs(file_dir)
-                file_path = os.path.join(file_dir, basename)
-                contents = await uf.read()
-                async with aiofiles.open(file_path, mode='wb') as f:
-                    await f.write(contents)
-                await uf.close()
-                uploaded_paths.append(f'/_f/{uid}/{basename}')   
-            return JSONResponse({"files":uploaded_paths})
-
-
         elif method == 'delete':
-            relative_path = request.url.path.removeprefix('/_f/')
             file_path = os.path.join(self._upload_dir, relative_path)
             await aiofiles.os.remove(file_path)
             return PlainTextResponse('')
+
+    async def handle_file_upload(self, request):
+        method  = request.method.lower()
+        if method != 'post':
+            raise HTTPException(status_code=405) 
+        form = await request.form()
+        files = form.getlist('files')
+        uploaded_paths = []
+        for uf in files:
+            basename = sanitize(os.path.basename(uf.filename))
+            uid = IDGenerator.create_file_id()
+            file_dir = os.path.join(self._upload_dir, uid)
+            await aiofiles.os.makedirs(file_dir)
+            file_path = os.path.join(file_dir, basename)
+            contents = await uf.read()
+            async with aiofiles.open(file_path, mode='wb') as f:
+                await f.write(contents)
+            await uf.close()
+            uploaded_paths.append(f'/_f/{uid}/{basename}')   
+        return JSONResponse({"files":uploaded_paths})
 
     async def __call__(self, scope, receive, send):
         return await self._server(scope, receive, send)
