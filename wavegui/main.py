@@ -231,15 +231,22 @@ class WaveApp:
     def __init__(self, **kwargs):
         self._mode = None
         self._base_url = ''
+        self._route = None
         self._routes = {}
+        self._static_dir = None
         self._startup = []
         self._shutdown = []
 
     def setup(self, route, handle, mode=None):
         self.mode = mode or UNICAST
+        if self._route == None:
+            self._route = route
         self._routes[route] = handle
         WaveApp.register(self)
     
+    def setup_static(self, local_dir):
+        self._static_dir = local_dir
+
     @classmethod
     def config_session(cls, max_age: 86400*14, session_cookie="", secret_key=""):
         cls._session_config['max_age'] = max_age
@@ -307,6 +314,8 @@ class WaveServer:
                 if not self.default_route:
                     self.default_route = route
                 routes.append(Route(route, self.app_page))
+            if app._static_dir:
+                routes.append(Mount(f'{app._route}/static', StaticFiles(directory=app._static_dir)))
             startup.extend(app._startup)
             shutdown.extend(app._shutdown)
         routes.extend([
