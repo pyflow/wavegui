@@ -211,7 +211,7 @@ class WaveApp:
             if route in cls._app_routes:
                 raise RouteDuplicatedError(f'Route {route} duplicated, registered twice.')
             cls._app_routes[route] = app
-    
+
     @classmethod
     def get_middlewares(cls):
         return [Middleware(SessionMiddleware, **cls._session_config)]
@@ -243,7 +243,7 @@ class WaveApp:
             self._route = route
         self._routes[route] = handle
         WaveApp.register(self)
-    
+
     def setup_static(self, local_dir):
         self._static_dir = local_dir
 
@@ -324,7 +324,6 @@ class WaveServer:
             Route('/_f/', self.handle_file_upload, methods=["POST"]),
             Route('/_f/{file_path:path}', self.handle_file, methods=["GET", "DELETE"]),
             Mount('/static', StaticFiles(directory=self._static_dir)),
-            Mount('/fonts', StaticFiles(directory=self._fonts_dir)),
             Route('/manifest.json', self.home_file),
             Route('/favicon.ico', self.home_file),
             Route('/logo192.png', self.home_file)
@@ -336,14 +335,14 @@ class WaveServer:
     def init_server(self):
         middleware = []
         middleware.extend(WaveApp.get_middlewares())
-        self._server = Starlette(debug=True, routes=self._routes, middleware=middleware, 
+        self._server = Starlette(debug=True, routes=self._routes, middleware=middleware,
             on_startup=self._startup, on_shutdown=self._shutdown)
 
     def homepage(self, request):
         if 'session_id' not in request.session:
            request.session['session_id'] = IDGenerator.create_session_id()
         return RedirectResponse(url=self.default_route)
-    
+
     def app_page(self, request):
         if 'session_id' not in request.session:
            request.session['session_id'] = IDGenerator.create_session_id()
@@ -357,7 +356,7 @@ class WaveServer:
     async def handle_ws(self, websocket):
         client = WaveClient(websocket)
         await client.handle()
-    
+
     async def handle_file(self, request):
         method  = request.method.lower()
         relative_path = request.path_params['file_path']
@@ -372,7 +371,7 @@ class WaveServer:
     async def handle_file_upload(self, request):
         method  = request.method.lower()
         if method != 'post':
-            raise HTTPException(status_code=405) 
+            raise HTTPException(status_code=405)
         form = await request.form()
         files = form.getlist('files')
         uploaded_paths = []
@@ -386,7 +385,7 @@ class WaveServer:
             async with aiofiles.open(file_path, mode='wb') as f:
                 await f.write(contents)
             await uf.close()
-            uploaded_paths.append(f'/_f/{uid}/{basename}')   
+            uploaded_paths.append(f'/_f/{uid}/{basename}')
         return JSONResponse({"files":uploaded_paths})
 
     async def __call__(self, scope, receive, send):

@@ -351,6 +351,7 @@ def message_bar(
         name: Optional[str] = None,
         width: Optional[str] = None,
         visible: Optional[bool] = None,
+        buttons: Optional[List[Component]] = None,
 ) -> Component:
     """Create a message bar.
 
@@ -364,6 +365,7 @@ def message_bar(
         name: An identifying name for this component.
         width: The width of the message bar, e.g. '100px'. Defaults to '100%'.
         visible: True if the component should be visible. Defaults to True.
+        buttons: Specify one or more action buttons.
     Returns:
         A `h2o_wave.types.MessageBar` instance.
     """
@@ -373,6 +375,7 @@ def message_bar(
         name,
         width,
         visible,
+        buttons,
     ))
 
 
@@ -726,6 +729,7 @@ def combobox(
         label: Optional[str] = None,
         placeholder: Optional[str] = None,
         value: Optional[str] = None,
+        values: Optional[List[str]] = None,
         choices: Optional[List[str]] = None,
         error: Optional[str] = None,
         disabled: Optional[bool] = None,
@@ -733,6 +737,7 @@ def combobox(
         visible: Optional[bool] = None,
         tooltip: Optional[str] = None,
         trigger: Optional[bool] = None,
+        required: Optional[bool] = None,
 ) -> Component:
     """Create a combobox.
 
@@ -751,6 +756,7 @@ def combobox(
         label: Text to be displayed alongside the component.
         placeholder: A string that provides a brief hint to the user as to what kind of information is expected in the field.
         value: The name of the selected choice.
+        values: The names of the selected choices. If set, multiple selections will be allowed.
         choices: The choices to be presented.
         error: Text to be displayed as an error below the text box.
         disabled: True if this field is disabled.
@@ -758,6 +764,7 @@ def combobox(
         visible: True if the component should be visible. Defaults to True.
         tooltip: An optional tooltip message displayed when a user clicks the help icon to the right of the component.
         trigger: True if the choice should be submitted when an item from the dropdown is selected or the textbox value changes.
+        required: True if this is a required field. Defaults to False.
     Returns:
         A `h2o_wave.types.Combobox` instance.
     """
@@ -766,6 +773,7 @@ def combobox(
         label,
         placeholder,
         value,
+        values,
         choices,
         error,
         disabled,
@@ -773,6 +781,7 @@ def combobox(
         visible,
         tooltip,
         trigger,
+        required,
     ))
 
 
@@ -985,6 +994,7 @@ def button(
         width: Optional[str] = None,
         visible: Optional[bool] = None,
         tooltip: Optional[str] = None,
+        path: Optional[str] = None,
 ) -> Component:
     """Create a button.
 
@@ -1006,7 +1016,7 @@ def button(
     Args:
         name: An identifying name for this component. If the name is prefixed with a '#', the button sets the location hash to the name when clicked.
         label: The text displayed on the button.
-        caption: The caption displayed below the label. Setting a caption renders a compound button.
+        caption: The caption displayed below the label.
         value: A value for this button. If a value is set, it is used for the button's submitted instead of a boolean True.
         primary: True if the button should be rendered as the primary button in the set.
         disabled: True if the button should be disabled.
@@ -1015,6 +1025,7 @@ def button(
         width: The width of the button, e.g. '100px'.
         visible: True if the component should be visible. Defaults to True.
         tooltip: An optional tooltip message displayed when a user clicks the help icon to the right of the component.
+        path: The path or URL to link to. If specified, the `name` is ignored. The URL is opened in a new browser window or tab.
     Returns:
         A `h2o_wave.types.Button` instance.
     """
@@ -1030,6 +1041,7 @@ def button(
         width,
         visible,
         tooltip,
+        path,
     ))
 
 
@@ -1230,6 +1242,45 @@ def tag_table_cell_type(
     ))
 
 
+def menu_table_cell_type(
+        commands: List[Command],
+        name: Optional[str] = None,
+) -> TableCellType:
+    """Create a cell type that renders command menu.
+
+    Commands are typically displayed as context menu items. Useful when you need to provide
+    multiple actions within a single row.
+
+    Args:
+        commands: Items to render.
+        name: An identifying name for this component.
+    Returns:
+        A `h2o_wave.types.MenuTableCellType` instance.
+    """
+    return TableCellType(menu=MenuTableCellType(
+        commands,
+        name,
+    ))
+
+
+def markdown_table_cell_type(
+        name: Optional[str] = None,
+        target: Optional[str] = None,
+) -> TableCellType:
+    """Create a cell type that renders Markdown content.
+
+    Args:
+        name: An identifying name for this component.
+        target: Where to display the link. Setting this to '_blank'` opens the link in a new tab or window.
+    Returns:
+        A `h2o_wave.types.MarkdownTableCellType` instance.
+    """
+    return TableCellType(markdown=MarkdownTableCellType(
+        name,
+        target,
+    ))
+
+
 def table_column(
         name: str,
         label: str,
@@ -1241,6 +1292,8 @@ def table_column(
         link: Optional[bool] = None,
         data_type: Optional[str] = None,
         cell_type: Optional[TableCellType] = None,
+        cell_overflow: Optional[str] = None,
+        filters: Optional[List[str]] = None,
 ) -> TableColumn:
     """Create a table column.
 
@@ -1255,6 +1308,8 @@ def table_column(
         link: Indicates whether each cell in this column should be displayed as a clickable link. Applies to exactly one text column in the table.
         data_type: Defines the data type of this column. Defaults to `string`. One of 'string', 'number', 'time'. See enum h2o_wave.ui.TableColumnDataType.
         cell_type: Defines how to render each cell in this column. Renders as plain text by default.
+        cell_overflow: Defines what to do with a cell's contents in case it does not fit inside the cell. One of 'tooltip', 'wrap'. See enum h2o_wave.ui.TableColumnCellOverflow.
+        filters: List of values to allow filtering by, needed when pagination is set. Only applicable to filterable columns.
     Returns:
         A `h2o_wave.types.TableColumn` instance.
     """
@@ -1269,6 +1324,8 @@ def table_column(
         link,
         data_type,
         cell_type,
+        cell_overflow,
+        filters,
     )
 
 
@@ -1290,10 +1347,51 @@ def table_row(
     )
 
 
+def table_group(
+        label: str,
+        rows: List[TableRow],
+        collapsed: Optional[bool] = None,
+) -> TableGroup:
+    """Make rows within the table collapsible/expandable.
+
+    This type of table is best used for cases when your data makes sense to be presented in chunks rather than a single flat list.
+
+    Args:
+        label: The title of the group.
+        rows: The rows in this group.
+        collapsed: Indicates whether the table group should be collapsed by default. Defaults to True.
+    Returns:
+        A `h2o_wave.types.TableGroup` instance.
+    """
+    return TableGroup(
+        label,
+        rows,
+        collapsed,
+    )
+
+
+def table_pagination(
+        total_rows: int,
+        rows_per_page: int,
+) -> TablePagination:
+    """Configure table pagination. Use as `pagination` parameter to `ui.table()`
+
+    Args:
+        total_rows: Total count of all the rows in your dataset.
+        rows_per_page: The maximum amount of rows to be displayed in a single page.
+    Returns:
+        A `h2o_wave.types.TablePagination` instance.
+    """
+    return TablePagination(
+        total_rows,
+        rows_per_page,
+    )
+
+
 def table(
         name: str,
         columns: List[TableColumn],
-        rows: List[TableRow],
+        rows: Optional[List[TableRow]] = None,
         multiple: Optional[bool] = None,
         groupable: Optional[bool] = None,
         downloadable: Optional[bool] = None,
@@ -1304,6 +1402,9 @@ def table(
         checkbox_visibility: Optional[str] = None,
         visible: Optional[bool] = None,
         tooltip: Optional[str] = None,
+        groups: Optional[List[TableGroup]] = None,
+        pagination: Optional[TablePagination] = None,
+        events: Optional[List[str]] = None,
 ) -> Component:
     """Create an interactive table.
 
@@ -1321,13 +1422,16 @@ def table(
     set to True, the form is not submitted automatically, and one or more buttons are required in the form to trigger
     submission.
 
+    If `pagination` is set, you have to handle search/filter/sort/download/page_change/reset events yourself since
+    none of these features will work automatically like in non-paginated table.
+
     Args:
         name: An identifying name for this component.
         columns: The columns in this table.
-        rows: The rows in this table.
+        rows: The rows in this table. Mutually exclusive with `groups` attr.
         multiple: True to allow multiple rows to be selected.
-        groupable: True to allow group by feature.
-        downloadable: Indicates whether the contents of this table can be downloaded and saved as a CSV file. Defaults to False.
+        groupable: True to allow group by feature. Not applicable when `pagination` is set.
+        downloadable: Indicates whether the table rows can be downloaded as a CSV file. Defaults to False.
         resettable: Indicates whether a Reset button should be displayed to reset search / filter / group-by values to their defaults. Defaults to False.
         height: The height of the table, e.g. '400px', '50%', etc.
         width: The width of the table, e.g. '100px'. Defaults to '100%'.
@@ -1335,6 +1439,9 @@ def table(
         checkbox_visibility: Controls visibility of table rows when `multiple` is set to `True`. Defaults to 'on-hover'. One of 'always', 'on-hover', 'hidden'. See enum h2o_wave.ui.TableCheckboxVisibility.
         visible: True if the component should be visible. Defaults to True.
         tooltip: An optional tooltip message displayed when a user clicks the help icon to the right of the component.
+        groups: Creates collapsible / expandable groups of data rows. Mutually exclusive with `rows` attr.
+        pagination: Display a pagination control at the bottom of the table. Set this value using `ui.table_pagination()`.
+        events: The events to capture on this table. One of 'search' | 'sort' | 'filter' | 'download' | 'page_change' | 'reset'.
     Returns:
         A `h2o_wave.types.Table` instance.
     """
@@ -1352,6 +1459,9 @@ def table(
         checkbox_visibility,
         visible,
         tooltip,
+        groups,
+        pagination,
+        events,
     ))
 
 
@@ -1744,6 +1854,9 @@ def mark(
         x0: Optional[Value] = None,
         x1: Optional[Value] = None,
         x2: Optional[Value] = None,
+        x_q1: Optional[Value] = None,
+        x_q2: Optional[Value] = None,
+        x_q3: Optional[Value] = None,
         x_min: Optional[float] = None,
         x_max: Optional[float] = None,
         x_nice: Optional[bool] = None,
@@ -1753,6 +1866,9 @@ def mark(
         y0: Optional[Value] = None,
         y1: Optional[Value] = None,
         y2: Optional[Value] = None,
+        y_q1: Optional[Value] = None,
+        y_q2: Optional[Value] = None,
+        y_q3: Optional[Value] = None,
         y_min: Optional[float] = None,
         y_max: Optional[float] = None,
         y_nice: Optional[bool] = None,
@@ -1803,8 +1919,11 @@ def mark(
         type: Graphical geometry. One of 'interval', 'line', 'path', 'point', 'area', 'polygon', 'schema', 'edge', 'heatmap'. See enum h2o_wave.ui.MarkType.
         x: X field or value.
         x0: X base field or value.
-        x1: X bin lower bound field or value. For histograms.
-        x2: X bin upper bound field or value. For histograms.
+        x1: X bin lower bound field or value. For histograms and box plots.
+        x2: X bin upper bound field or value. For histograms and box plots.
+        x_q1: X lower quartile. For box plots.
+        x_q2: X median. For box plots.
+        x_q3: X upper quartile. For box plots.
         x_min: X axis scale minimum.
         x_max: X axis scale maximum.
         x_nice: Whether to nice X axis scale ticks.
@@ -1812,8 +1931,11 @@ def mark(
         x_title: X axis title.
         y: Y field or value.
         y0: Y base field or value.
-        y1: Y bin lower bound field or value. For histograms.
-        y2: Y bin upper bound field or value. For histograms.
+        y1: Y bin lower bound field or value. For histograms and box plots.
+        y2: Y bin upper bound field or value. For histograms and box plots.
+        y_q1: Y lower quartile. For box plots.
+        y_q2: Y median. For box plots.
+        y_q3: Y upper quartile. For box plots.
         y_min: Y axis scale minimum.
         y_max: Y axis scale maximum.
         y_nice: Whether to nice Y axis scale ticks.
@@ -1865,6 +1987,9 @@ def mark(
         x0,
         x1,
         x2,
+        x_q1,
+        x_q2,
+        x_q3,
         x_min,
         x_max,
         x_nice,
@@ -1874,6 +1999,9 @@ def mark(
         y0,
         y1,
         y2,
+        y_q1,
+        y_q2,
+        y_q3,
         y_min,
         y_max,
         y_nice,
@@ -1941,6 +2069,7 @@ def visualization(
         name: Optional[str] = None,
         visible: Optional[bool] = None,
         events: Optional[List[str]] = None,
+        interactions: Optional[List[str]] = None,
 ) -> Component:
     """Create a visualization for display inside a form.
 
@@ -1951,7 +2080,8 @@ def visualization(
         height: The hight of the visualization. Defaults to '300px'.
         name: An identifying name for this component.
         visible: True if the component should be visible. Defaults to True.
-        events: The events to capture on this visualization.
+        events: The events to capture on this visualization. One of 'select_marks'.
+        interactions: The interactions to be allowed for this plot. One of 'drag_move' | 'scale_zoom' | 'brush'. Note: `brush` does not raise `select_marks` event.
     Returns:
         A `h2o_wave.types.Visualization` instance.
     """
@@ -1963,6 +2093,7 @@ def visualization(
         name,
         visible,
         events,
+        interactions,
     ))
 
 
@@ -1973,6 +2104,7 @@ def vega_visualization(
         height: Optional[str] = None,
         name: Optional[str] = None,
         visible: Optional[bool] = None,
+        grammar: Optional[str] = None,
 ) -> Component:
     """Create a Vega-lite plot for display inside a form.
 
@@ -1983,6 +2115,7 @@ def vega_visualization(
         height: The height of the visualization. Defaults to '300px'.
         name: An identifying name for this component.
         visible: True if the component should be visible. Defaults to True.
+        grammar: Vega grammar to use. Defaults to 'vega-lite'. One of 'vega-lite', 'vega'. See enum h2o_wave.ui.VegaVisualizationGrammar.
     Returns:
         A `h2o_wave.types.VegaVisualization` instance.
     """
@@ -1993,6 +2126,7 @@ def vega_visualization(
         height,
         name,
         visible,
+        grammar,
     ))
 
 
@@ -2167,7 +2301,7 @@ def text_annotator_item(
 
     Args:
         text: Text to be highlighted.
-        tag: Tag connected to the highlighted text.
+        tag: The `name` of the text annotator tag to refer to for the `label` and `color` of this item.
     Returns:
         A `h2o_wave.types.TextAnnotatorItem` instance.
     """
@@ -2183,6 +2317,7 @@ def text_annotator(
         tags: List[TextAnnotatorTag],
         items: List[TextAnnotatorItem],
         trigger: Optional[bool] = None,
+        readonly: Optional[bool] = None,
 ) -> Component:
     """Create a text annotator component.
 
@@ -2194,6 +2329,7 @@ def text_annotator(
         tags: List of tags the user can annotate with.
         items: Pretagged parts of text content.
         trigger: True if the form should be submitted when the annotator value changes.
+        readonly: True to prevent user interaction with the annotator component. Defaults to False.
     Returns:
         A `h2o_wave.types.TextAnnotator` instance.
     """
@@ -2203,6 +2339,105 @@ def text_annotator(
         tags,
         items,
         trigger,
+        readonly,
+    ))
+
+
+def image_annotator_tag(
+        name: str,
+        label: str,
+        color: str,
+) -> ImageAnnotatorTag:
+    """Create a unique tag type for use in an image annotator.
+
+    Args:
+        name: An identifying name for this tag.
+        label: Text to be displayed for the annotation.
+        color: Hex or RGB color string to be used as the background color.
+    Returns:
+        A `h2o_wave.types.ImageAnnotatorTag` instance.
+    """
+    return ImageAnnotatorTag(
+        name,
+        label,
+        color,
+    )
+
+
+def image_annotator_rect(
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+) -> ImageAnnotatorShape:
+    """Create a rectangular annotation shape.
+
+    Args:
+        x1: `x` coordinate of the rectangle's corner.
+        y1: `y` coordinate of the rectangle's corner.
+        x2: `x` coordinate of the diagonally opposite corner.
+        y2: `y` coordinate of the diagonally opposite corner.
+    Returns:
+        A `h2o_wave.types.ImageAnnotatorRect` instance.
+    """
+    return ImageAnnotatorShape(rect=ImageAnnotatorRect(
+        x1,
+        y1,
+        x2,
+        y2,
+    ))
+
+
+def image_annotator_item(
+        shape: ImageAnnotatorShape,
+        tag: str,
+) -> ImageAnnotatorItem:
+    """Create an annotator item with initial selected tags or no tag for plaintext.
+
+    Args:
+        shape: The annotation shape.
+        tag: The `name` of the image annotator tag to refer to for the `label` and `color` of this item.
+    Returns:
+        A `h2o_wave.types.ImageAnnotatorItem` instance.
+    """
+    return ImageAnnotatorItem(
+        shape,
+        tag,
+    )
+
+
+def image_annotator(
+        name: str,
+        image: str,
+        title: str,
+        tags: List[ImageAnnotatorTag],
+        items: Optional[List[ImageAnnotatorItem]] = None,
+        trigger: Optional[bool] = None,
+        image_height: Optional[str] = None,
+) -> Component:
+    """Create an image annotator component.
+
+    This component allows annotating and labeling parts of an image by drawing shapes with a pointing device.
+
+    Args:
+        name: An identifying name for this component.
+        image: The path or URL of the image to be presented for annotation.
+        title: The image annotator's title.
+        tags: The master list of tags that can be used for annotations.
+        items: Annotations to display on the image, if any.
+        trigger: True if the form should be submitted as soon as an annotation is drawn.
+        image_height: The card’s image height. The actual image size is used by default.
+    Returns:
+        A `h2o_wave.types.ImageAnnotator` instance.
+    """
+    return Component(image_annotator=ImageAnnotator(
+        name,
+        image,
+        title,
+        tags,
+        items,
+        trigger,
+        image_height,
     ))
 
 
@@ -2277,6 +2512,21 @@ def menu(
         icon,
         image,
         name,
+    ))
+
+
+def tags(
+        items: List[Tag],
+) -> Component:
+    """Create a set of tags laid out horizontally.
+
+    Args:
+        items: Tags in this set.
+    Returns:
+        A `h2o_wave.types.Tags` instance.
+    """
+    return Component(tags=Tags(
+        items,
     ))
 
 
@@ -2623,6 +2873,7 @@ def nav_item(
         label: str,
         icon: Optional[str] = None,
         disabled: Optional[bool] = None,
+        tooltip: Optional[str] = None,
 ) -> NavItem:
     """Create a navigation item.
 
@@ -2631,6 +2882,7 @@ def nav_item(
         label: The label to display.
         icon: An optional icon to display next to the label.
         disabled: True if this item should be disabled.
+        tooltip: An optional tooltip message displayed when a user hovers over this item.
     Returns:
         A `h2o_wave.types.NavItem` instance.
     """
@@ -2639,6 +2891,7 @@ def nav_item(
         label,
         icon,
         disabled,
+        tooltip,
     )
 
 
@@ -2685,7 +2938,7 @@ def header_card(
         subtitle: The subtitle, displayed below the title. *
         icon: The icon, displayed to the left. *
         icon_color: The icon's color. *
-        image: The logo displayed to the left. Mutually exclusive with icon. *
+        image: The URL of an image (usually logo) displayed to the left. Mutually exclusive with icon. *
         nav: The navigation menu to display when the header's icon is clicked. Recommended for mobile screens only. *
         items: Items that should be displayed on the right side of the header.
         secondary_items: Items that should be displayed in the center of the header.
@@ -2940,6 +3193,42 @@ def markup_card(
     )
 
 
+def notification_bar(
+        text: str,
+        type: Optional[str] = None,
+        timeout: Optional[int] = None,
+        buttons: Optional[List[Component]] = None,
+        position: Optional[str] = None,
+        events: Optional[List[str]] = None,
+        name: Optional[str] = None,
+) -> NotificationBar:
+    """Create a notification bar.
+
+    A notification bar is an area at the edge of a primary view that displays relevant status information.
+    You can use a notification bar to tell the user about a result of an action, e.g. "Data has been successfully saved".
+
+    Args:
+        text: The text displayed on the notification bar.
+        type: The icon and color of the notification bar. Defaults to 'info'. One of 'info', 'error', 'warning', 'success', 'danger', 'blocked'. See enum h2o_wave.ui.NotificationBarType.
+        timeout: How long the notification stays visible, in seconds. If set to -1, the notification has to be closed manually. Defaults to 5.
+        buttons: Specify one or more action buttons.
+        position: Specify the location of notification. Defaults to 'top-right'. One of 'top-right', 'bottom-right', 'bottom-center', 'bottom-left', 'top-left', 'top-center'. See enum h2o_wave.ui.NotificationBarPosition.
+        events: The events to capture on this notification bar. One of 'dismissed'.
+        name: An identifying name for this component.
+    Returns:
+        A `h2o_wave.types.NotificationBar` instance.
+    """
+    return NotificationBar(
+        text,
+        type,
+        timeout,
+        buttons,
+        position,
+        events,
+        name,
+    )
+
+
 def zone(
         name: str,
         size: Optional[str] = None,
@@ -3034,7 +3323,7 @@ def dialog(
         blocking: True to prevent closing when clicking or tapping outside the dialog. Prevents interacting with the page behind the dialog. Defaults to False.
         primary: Dialog with large header banner, mutually exclusive with `closable` prop. Defaults to False.
         name: An identifying name for this component.
-        events: The events to capture on this dialog.
+        events: The events to capture on this dialog. One of 'dismissed'.
     Returns:
         A `h2o_wave.types.Dialog` instance.
     """
@@ -3057,6 +3346,7 @@ def side_panel(
         name: Optional[str] = None,
         events: Optional[List[str]] = None,
         blocking: Optional[bool] = None,
+        closable: Optional[bool] = None,
 ) -> SidePanel:
     """A dialog box (Dialog) is a temporary pop-up that takes focus from the page or app
     and requires people to interact with it. It’s primarily used for confirming actions,
@@ -3067,8 +3357,9 @@ def side_panel(
         items: The components displayed in this side panel.
         width: The width of the dialog, e.g. '400px'. Defaults to '600px'.
         name: An identifying name for this component.
-        events: The events to capture on this side panel.
+        events: The events to capture on this side panel. One of 'dismissed'.
         blocking: True to prevent closing when clicking or tapping outside the side panel. Prevents interacting with the page behind the side panel. Defaults to False.
+        closable: True if the side panel should have a closing 'X' button at the top right corner.
     Returns:
         A `h2o_wave.types.SidePanel` instance.
     """
@@ -3079,6 +3370,7 @@ def side_panel(
         name,
         events,
         blocking,
+        closable,
     )
 
 
@@ -3219,6 +3511,7 @@ def meta_card(
         title: Optional[str] = None,
         refresh: Optional[int] = None,
         notification: Optional[str] = None,
+        notification_bar: Optional[NotificationBar] = None,
         redirect: Optional[str] = None,
         icon: Optional[str] = None,
         layouts: Optional[List[Layout]] = None,
@@ -3243,6 +3536,7 @@ def meta_card(
         title: The title of the page.
         refresh: Refresh rate in seconds. A value of 0 turns off live-updates. Values != 0 are currently ignored (reserved for future use).
         notification: Display a desktop notification.
+        notification_bar: Display an in-app notification bar.
         redirect: Redirect the page to a new URL.
         icon: Shortcut icon path. Preferably a `.png` file (`.ico` files may not work in mobile browsers). Not supported in Safari.
         layouts: The layouts supported by this page.
@@ -3264,6 +3558,7 @@ def meta_card(
         title,
         refresh,
         notification,
+        notification_bar,
         redirect,
         icon,
         layouts,
@@ -3299,12 +3594,12 @@ def nav_card(
     Args:
         box: A string indicating how to place this component on the page.
         items: The navigation groups contained in this pane.
-        value: The name of the initially active (highlighted) navigation item.
+        value: The name of the active (highlighted) navigation item.
         title: The card's title.
         subtitle: The card's subtitle.
         icon: The icon, displayed to the left. *
         icon_color: The icon's color. *
-        image: The logo displayed at the top. *
+        image: The URL of an image (usually logo) displayed at the top. *
         persona: The user avatar displayed at the top. Mutually exclusive with image, title and subtitle. *
         secondary_items: Items that should be displayed at the bottom of the card if items are not empty, otherwise displayed under subtitle.
         color: Card background color. Defaults to 'card'. One of 'card', 'primary'. See enum h2o_wave.ui.NavCardColor.
@@ -3361,6 +3656,7 @@ def plot_card(
         data: PackedRecord,
         plot: Plot,
         events: Optional[List[str]] = None,
+        interactions: Optional[List[str]] = None,
         commands: Optional[List[Command]] = None,
 ) -> PlotCard:
     """Create a card displaying a plot.
@@ -3370,7 +3666,8 @@ def plot_card(
         title: The title for this card.
         data: Data for this card.
         plot: The plot to be displayed in this card.
-        events: The events to capture on this card.
+        events: The events to capture on this card. One of 'select_marks'.
+        interactions: The interactions to be allowed for this card. One of 'drag_move' | 'scale_zoom' | 'brush'. Note: `brush` does not raise `select_marks` event.
         commands: Contextual menu commands for this component.
     Returns:
         A `h2o_wave.types.PlotCard` instance.
@@ -3381,6 +3678,7 @@ def plot_card(
         data,
         plot,
         events,
+        interactions,
         commands,
     )
 
@@ -3436,7 +3734,7 @@ def preview_card(
         image: The card’s image.
         title: The card's title
         items: Mini buttons displayed at the top-right corner
-        caption: The card's caption, displayed bellow the title.
+        caption: The card's caption, displayed below the title.
         label: Label of a button rendered at the bottom of the card. If specified, the whole card is not clickable anymore.
         commands: Contextual menu commands for this component.
     Returns:
@@ -3688,6 +3986,7 @@ def stat_table_item(
         caption: Optional[str] = None,
         icon: Optional[str] = None,
         icon_color: Optional[str] = None,
+        colors: Optional[List[str]] = None,
 ) -> StatTableItem:
     """Create a stat item (a label and a set of values) for stat_table_card.
 
@@ -3698,6 +3997,7 @@ def stat_table_item(
         caption: The caption for the metric, displayed below the label.
         icon: An optional icon, displayed next to the label.
         icon_color: The color of the icon.
+        colors: List of colors used for each value in values ordered respectively.
     Returns:
         A `h2o_wave.types.StatTableItem` instance.
     """
@@ -3708,6 +4008,7 @@ def stat_table_item(
         caption,
         icon,
         icon_color,
+        colors,
     )
 
 
@@ -3947,7 +4248,7 @@ def tall_stats_card(
         items: List[Stat],
         commands: Optional[List[Command]] = None,
 ) -> TallStatsCard:
-    """Create a vertical label-value pairs collection.
+    """Create a vertical label-value pairs collection. Icon in `ui.stat` is not yet supported in this card.
 
     Args:
         box: A string indicating how to place this component on the page.
@@ -4022,6 +4323,7 @@ def vega_card(
         title: str,
         specification: str,
         data: Optional[PackedRecord] = None,
+        grammar: Optional[str] = None,
         commands: Optional[List[Command]] = None,
 ) -> VegaCard:
     """Create a card containing a Vega-lite plot.
@@ -4031,6 +4333,7 @@ def vega_card(
         title: The title of this card.
         specification: The Vega-lite specification.
         data: Data for the plot, if any.
+        grammar: Vega grammar to use. Defaults to 'vega-lite'. One of 'vega-lite', 'vega'. See enum h2o_wave.ui.VegaCardGrammar.
         commands: Contextual menu commands for this component.
     Returns:
         A `h2o_wave.types.VegaCard` instance.
@@ -4040,6 +4343,7 @@ def vega_card(
         title,
         specification,
         data,
+        grammar,
         commands,
     )
 
@@ -4053,6 +4357,7 @@ def wide_article_preview_card(
         aux_value: Optional[str] = None,
         caption: Optional[str] = None,
         items: Optional[List[Component]] = None,
+        content: Optional[str] = None,
         commands: Optional[List[Command]] = None,
 ) -> WideArticlePreviewCard:
     """Create a wide article preview card displaying a persona, image, title, caption, and optional buttons.
@@ -4064,12 +4369,15 @@ def wide_article_preview_card(
         title: The card's title on the right-hand side
         name: An identifying name for this card. Makes the card clickable, similar to a button.
         aux_value: The card's auxiliary text, displayed on the right-hand side of the header.
-        caption: The card's caption, displayed below the title on the right-hand side.
+        caption: DEPRECATED. Use `content` instead. The card's caption, displayed below the title on the right-hand side.
         items: The card's buttons, displayed under the caption.
+        content: The card's markdown content, displayed below the title on the right-hand side.
         commands: Contextual menu commands for this component.
     Returns:
         A `h2o_wave.types.WideArticlePreviewCard` instance.
     """
+    if caption is not None:
+        warnings.warn('The caption argument is deprecated.')
     return WideArticlePreviewCard(
         box,
         persona,
@@ -4079,6 +4387,7 @@ def wide_article_preview_card(
         aux_value,
         caption,
         items,
+        content,
         commands,
     )
 
