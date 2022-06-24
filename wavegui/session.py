@@ -43,6 +43,8 @@ class AsyncPage(PageBase):
         if p:
             logger.debug(p)
             await self._patch(p)
+        else:
+            await self._patch({"d":[]})
 
     def _make_card(self, data, buf):
         return {'d':data}
