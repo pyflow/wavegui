@@ -26,6 +26,9 @@ class AsyncPage(PageBase):
         self.data = {}
         super().__init__(url)
 
+    def keys(self):
+        return self.data.keys()
+
     def _get_diff(self):
         if len(self._changes) == 0:
             return None
@@ -63,7 +66,7 @@ class AsyncPage(PageBase):
         data = await self._queue.get()
         # self._queue.task_done()
         return data
-    
+
     def send_done(self):
         self._queue.task_done()
 
@@ -95,7 +98,7 @@ class UserInfo:
     def __init__(self, user_id=None, user_name=None):
         self.user_id = user_id or 'WAVE_USER_ID'
         self.user_name = user_name or 'anon'
-    
+
     def anonymouse(self):
         return self.user_id == 'WAVE_USER_ID'
 

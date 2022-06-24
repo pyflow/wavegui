@@ -1,0 +1,1 @@
+SETUPTOOLS_USE_DISTUTILS=stdlib pytest .

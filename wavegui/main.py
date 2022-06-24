@@ -28,6 +28,8 @@ from .exception import NoHandlerException, RouteDuplicatedError, AppNotFoundExce
 from .task import TaskManager
 import aiofiles
 import aiofiles.os
+from functools import partial
+from .template import template
 
 HandleAsync = Callable[[Query], Awaitable[Any]]
 
@@ -236,6 +238,11 @@ class WaveApp:
         self._static_dir = None
         self._startup = []
         self._shutdown = []
+        self._info = {'name': "Wavegui App",
+            "description": "This is Default Wavegui App",
+            "icon": "favicon.ico",
+            "logo":"logo192.png",
+            "manifest":"manifest.json"}
 
     def setup(self, route, handle, mode=None):
         self.mode = mode or UNICAST
@@ -246,6 +253,26 @@ class WaveApp:
 
     def setup_static(self, local_dir):
         self._static_dir = local_dir
+
+    def setup_info(self, name, description=None, icon=None, logo=None, manifest=None):
+        if name:
+            self._info['name'] = name
+        if description:
+            self._info['description'] = description
+        if icon:
+            self._info['icon'] = icon
+        if logo:
+            self._info['logo'] = logo
+
+        if name or description or icon or logo:
+            if self._info['manifest'] == 'mainfest.json':
+                self._info['manifest'] = None
+        if manifest:
+            self._info['manifest'] = manifest
+
+    @property
+    def info(self):
+        return self._info
 
     @classmethod
     def config_session(cls, max_age: 86400*14, session_cookie="", secret_key=""):
@@ -346,8 +373,9 @@ class WaveServer:
     def app_page(self, request):
         if 'session_id' not in request.session:
            request.session['session_id'] = IDGenerator.create_session_id()
+        app = WaveApp.get(request.url.path)
         with open(os.path.join(self._www_dir, 'index.html'), 'r') as f:
-            return HTMLResponse(f.read())
+            return HTMLResponse(template(f.read(), app.info))
 
     def home_file(self, request):
         name = os.path.basename(request.url.path)
