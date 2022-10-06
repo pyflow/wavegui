@@ -7,13 +7,15 @@ import socket
 from contextlib import closing
 import uvicorn
 import os
+from starlette.datastructures import URL, Headers
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
 from starlette.middleware import Middleware
 from starlette.middleware.sessions import SessionMiddleware
-from starlette.responses import PlainTextResponse, JSONResponse, HTMLResponse, FileResponse, RedirectResponse
+from starlette.responses import PlainTextResponse, JSONResponse, HTMLResponse, FileResponse, RedirectResponse, Response
 from starlette.routing import Route, Mount, WebSocketRoute
-from starlette.staticfiles import StaticFiles
+from starlette.staticfiles import StaticFiles, NotModifiedResponse
+from starlette.types import Receive, Scope, Send
 import importlib.resources
 import traceback
 import logging
@@ -30,6 +32,10 @@ import aiofiles
 import aiofiles.os
 from functools import partial
 from .template import template
+from mimetypes import guess_type as mimetypes_guess_type
+import typing
+
+PathLike = typing.Union[str, "os.PathLike[str]"]
 
 HandleAsync = Callable[[Query], Awaitable[Any]]
 
@@ -43,6 +49,34 @@ def _scan_free_port(port: int = 8000):
                 return port
         port += 1
 
+def guess_type(
+    url, strict: bool = True
+):
+    if sys.version_info < (3, 8):  # pragma: no cover
+        url = os.fspath(url)
+    if url.lower().endswith('.js'):
+        return ('text/javascript', 'utf-8')
+    else:
+        return mimetypes_guess_type(url, strict)
+
+class MimeStaticFiles(StaticFiles):
+    def file_response(
+        self,
+        full_path: PathLike,
+        stat_result: os.stat_result,
+        scope: Scope,
+        status_code: int = 200,
+    ) -> Response:
+        method = scope["method"]
+        request_headers = Headers(scope=scope)
+
+        response = FileResponse(
+            full_path, status_code=status_code, stat_result=stat_result, method=method,
+            media_type = guess_type(full_path)[0]
+        )
+        if self.is_not_modified(response.headers, request_headers):
+            return NotModifiedResponse(response.headers)
+        return response
 
 class ClientRequest:
     bad_request = object()
@@ -342,7 +376,7 @@ class WaveServer:
                     self.default_route = route
                 routes.append(Route(route, self.app_page))
             if app._static_dir:
-                routes.append(Mount(f'{app._route}/static', StaticFiles(directory=app._static_dir)))
+                routes.append(Mount(f'{app._route}/static', MimeStaticFiles(directory=app._static_dir)))
             startup.extend(app._startup)
             shutdown.extend(app._shutdown)
         routes.extend([
@@ -350,10 +384,11 @@ class WaveServer:
             WebSocketRoute('/_s/', self.handle_ws),
             Route('/_f/', self.handle_file_upload, methods=["POST"]),
             Route('/_f/{file_path:path}', self.handle_file, methods=["GET", "DELETE"]),
-            Mount('/static', StaticFiles(directory=self._static_dir)),
+            Mount('/static', MimeStaticFiles(directory=self._static_dir)),
             Route('/manifest.json', self.home_file),
             Route('/favicon.ico', self.home_file),
-            Route('/logo192.png', self.home_file)
+            Route('/logo192.png', self.home_file),
+            Route('/logo512.png', self.home_file)
             ])
         self._routes = routes
         self._startup = startup
