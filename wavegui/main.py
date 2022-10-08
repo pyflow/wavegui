@@ -144,11 +144,14 @@ class WaveClient:
             req = ClientRequest.load(self, text)
             if req in [ClientRequest.invalid_request, ClientRequest.bad_request, None]:
                 continue
+
+            await self.process(req)
+
             if req.action == 'watch':
                 self.page_route = req.addr
                 await self.task_manager.spawn(self.start_sync_task())
 
-            await self.process(req)
+
 
     async def _close_sync_task(self):
         if not self.sync_task:
@@ -316,10 +319,10 @@ class WaveApp:
         if secret_key:
             cls._session_config['secret_key'] = secret_key
 
-    def run(self, on_startup=[], on_shutdown=[], no_reload=True, log_level="info"):
+    def run(self, on_startup=[], on_shutdown=[], no_reload=True, log_level="info", init_options=None):
         self._startup.extend(on_startup)
         self._shutdown.extend(on_shutdown)
-        WaveServer.run(no_reload=no_reload, log_level=log_level)
+        WaveServer.run(no_reload=no_reload, log_level=log_level, init_options=init_options)
 
     async def handle(self, route, q):
         handler = self._routes.get(route)
