@@ -21,7 +21,7 @@ setup(
     license='MIT',
     author='Wei Zhuo',
     author_email='zeaphoo@qq.com',
-    description='Chia network plot manager, auto plot manager',
+    description='web based ui framework, write pretty ui without knoledge of css/html.',
     long_description=long_description,
     long_description_content_type="text/markdown",
     packages=packages,
