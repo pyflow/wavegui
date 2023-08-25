@@ -319,10 +319,10 @@ class WaveApp:
         if secret_key:
             cls._session_config['secret_key'] = secret_key
 
-    def run(self, on_startup=[], on_shutdown=[], no_reload=True, log_level="info", init_options=None):
+    def run(self, on_startup=[], on_shutdown=[], no_reload=True, log_level="info", init_options=None, **kwargs):
         self._startup.extend(on_startup)
         self._shutdown.extend(on_shutdown)
-        WaveServer.run(no_reload=no_reload, log_level=log_level, init_options=init_options)
+        WaveServer.run(no_reload=no_reload, log_level=log_level, init_options=init_options, **kwargs)
 
     async def handle(self, route, q):
         handler = self._routes.get(route)
@@ -344,11 +344,11 @@ class WaveServer:
     _server = None
 
     @classmethod
-    def run(cls, init_options=None, no_reload=True, log_level="info"):
+    def run(cls, init_options=None, no_reload=True, log_level="info", **kwargs):
         if not cls._server:
-            kwargs = init_options or {}
-            cls._server = cls(**kwargs)
-        cls._server.run_forever(no_reload=no_reload, log_level=log_level)
+            init_kwargs = init_options or {}
+            cls._server = cls(**init_kwargs)
+        cls._server.run_forever(no_reload=no_reload, log_level=log_level, **kwargs)
 
 
     def __init__(self, **kwargs):
@@ -457,8 +457,8 @@ class WaveServer:
     async def __call__(self, scope, receive, send):
         return await self._server(scope, receive, send)
 
-    def run_forever(self, no_reload=True, log_level="info"):
-        port = _scan_free_port()
+    def run_forever(self, no_reload=True, log_level="info", **kwargs):
+        port = kwargs.get('port', 8000)
         sys.path.insert(0, '.')
         self.init_routes()
         self.init_server()
