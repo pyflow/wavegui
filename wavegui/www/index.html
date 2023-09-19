@@ -3,25 +3,23 @@
 
 <head>
   <meta charset="utf-8" />
-  <link rel="icon" href="{{ icon }}" />
-  <link rel="apple-touch-icon" href="{{ logo }}" />
+  <link rel="icon" href="favicon.ico" />
+  <link rel="apple-touch-icon" href="logo192.png" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#000000" />
-  <meta name="description" content="{{ description }}" />
-% if manifest:
-  <link rel="manifest" href="{{ manifest }}" crossorigin="use-credentials" />
-% end
-
-  <title>{{ name }}</title>
-  <script type="module" crossorigin type="text/javascript" src="static/index.10e23dcf.js"></script>
-  <link rel="modulepreload" type="text/javascript" href="static/vendor.2f0b4f78.js">
-  <link rel="stylesheet" href="static/index.5fd03832.css">
-  <script type="module">!function(){try{new Function("m","return import(m)")}catch(o){console.warn("vite: loading legacy build because dynamic import is unsupported, syntax error above should be ignored");var e=document.getElementById("vite-legacy-polyfill"),n=document.createElement("script");n.src=e.src,n.onload=function(){System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))},document.body.appendChild(n)}}();</script>
+  <meta name="description" content="H2O Wave App" />
+  <link rel="manifest" href="manifest.json" crossorigin="use-credentials" />
+  
+  <title>H2O Wave</title>
+  <script type="module" crossorigin src="./wave-static/index-fe0329c3.js"></script>
+  <link rel="stylesheet" href="./wave-static/index-46c254f1.css">
+  <script type="module">try{import.meta.url;import("_").catch(()=>1);}catch(e){}window.__vite_is_modern_browser=true;</script>
+  <script type="module">!function(){if(window.__vite_is_modern_browser)return;console.warn("vite: loading legacy build because dynamic import or import.meta.url is unsupported, syntax error above should be ignored");var e=document.getElementById("vite-legacy-polyfill"),n=document.createElement("script");n.src=e.src,n.onload=function(){System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))},document.body.appendChild(n)}();</script>
 </head>
 
 <body>
   <noscript>You need to enable JavaScript to run this app.</noscript>
-  <div id="root"></div>
+  <div id="wave-root"></div>
   <!--
       This HTML file is a template.
       If you open it directly in the browser, you will see an empty page.
@@ -32,10 +30,10 @@
       To begin the development, run `npm start` or `yarn start`.
       To create a production bundle, use `npm run build` or `yarn build`.
     -->
-
+  
   <script nomodule>!function(){var e=document,t=e.createElement("script");if(!("noModule"in t)&&"onbeforeload"in t){var n=!1;e.addEventListener("beforeload",(function(e){if(e.target===t)n=!0;else if(!e.target.hasAttribute("nomodule")||!n)return;e.preventDefault()}),!0),t.type="module",t.src=".",e.head.appendChild(t),t.remove()}}();</script>
-  <script nomodule id="vite-legacy-polyfill" type="text/javascript" src="static/polyfills-legacy.13970731.js"></script>
-  <script nomodule id="vite-legacy-entry" type="text/javascript" data-src="static/index-legacy.2f28cb95.js">System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))</script>
+  <script nomodule crossorigin id="vite-legacy-polyfill" src="./wave-static/polyfills-legacy-461438c8.js"></script>
+  <script nomodule crossorigin id="vite-legacy-entry" data-src="./wave-static/index-legacy-63417ab2.js">System.import(document.getElementById('vite-legacy-entry').getAttribute('data-src'))</script>
 </body>
 
 </html>

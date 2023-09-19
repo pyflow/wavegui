@@ -364,8 +364,7 @@ class WaveServer:
 
         with importlib.resources.path('wavegui', '__init__.py') as f:
             self._www_dir = os.path.join(os.path.dirname(f), 'www')
-            self._static_dir = os.path.join(self._www_dir, 'static')
-            self._fonts_dir = os.path.join(self._www_dir, 'fonts')
+            self._static_dir = os.path.join(self._www_dir, 'wave-static')
 
 
     def init_routes(self):
@@ -387,7 +386,7 @@ class WaveServer:
             WebSocketRoute('/_s/', self.handle_ws),
             Route('/_f/', self.handle_file_upload, methods=["POST"]),
             Route('/_f/{file_path:path}', self.handle_file, methods=["GET", "DELETE"]),
-            Mount('/static', MimeStaticFiles(directory=self._static_dir)),
+            Mount('/wave-static', MimeStaticFiles(directory=self._static_dir)),
             Route('/manifest.json', self.home_file),
             Route('/favicon.ico', self.home_file),
             Route('/logo192.png', self.home_file),

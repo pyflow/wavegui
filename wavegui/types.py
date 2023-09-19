@@ -20,7 +20,7 @@ from typing import Any, Optional, Union, Dict, List
 from .core import Data
 
 Value = Union[str, float, int]
-PackedRecord = Union[dict, str]
+PackedRecord = Union[dict, str, Data]
 PackedRecords = Union[List[dict], str]
 PackedData = Union[Data, str]
 
@@ -759,6 +759,14 @@ class Separator:
         )
 
 
+_ProgressType = ['bar', 'spinner']
+
+
+class ProgressType:
+    BAR = 'bar'
+    SPINNER = 'spinner'
+
+
 class Progress:
     """Create a progress bar.
 
@@ -789,6 +797,7 @@ class Progress:
             visible: Optional[bool] = None,
             tooltip: Optional[str] = None,
             name: Optional[str] = None,
+            type: Optional[str] = None,
     ):
         _guard_scalar('Progress.label', label, (str,), False, False, False)
         _guard_scalar('Progress.caption', caption, (str,), False, True, False)
@@ -797,10 +806,11 @@ class Progress:
         _guard_scalar('Progress.visible', visible, (bool,), False, True, False)
         _guard_scalar('Progress.tooltip', tooltip, (str,), False, True, False)
         _guard_scalar('Progress.name', name, (str,), False, True, False)
+        _guard_enum('Progress.type', type, _ProgressType, True)
         self.label = label
-        """The text displayed above the bar."""
+        """The text displayed above the bar or right to the spinner."""
         self.caption = caption
-        """The text displayed below the bar."""
+        """The text displayed below the bar or spinner."""
         self.value = value
         """The progress, between 0.0 and 1.0, or -1 (default) if indeterminate."""
         self.width = width
@@ -811,6 +821,8 @@ class Progress:
         """An optional tooltip message displayed when a user clicks the help icon to the right of the component."""
         self.name = name
         """An identifying name for this component."""
+        self.type = type
+        """The type of progress bar to be displayed. One of 'bar', 'spinner'. Defaults to 'bar'. One of 'bar', 'spinner'. See enum h2o_wave.ui.ProgressType."""
 
     def dump(self) -> Dict:
         """Returns the contents of this object as a dict."""
@@ -821,6 +833,7 @@ class Progress:
         _guard_scalar('Progress.visible', self.visible, (bool,), False, True, False)
         _guard_scalar('Progress.tooltip', self.tooltip, (str,), False, True, False)
         _guard_scalar('Progress.name', self.name, (str,), False, True, False)
+        _guard_enum('Progress.type', self.type, _ProgressType, True)
         return _dump(
             label=self.label,
             caption=self.caption,
@@ -829,6 +842,7 @@ class Progress:
             visible=self.visible,
             tooltip=self.tooltip,
             name=self.name,
+            type=self.type,
         )
 
     @staticmethod
@@ -848,6 +862,8 @@ class Progress:
         _guard_scalar('Progress.tooltip', __d_tooltip, (str,), False, True, False)
         __d_name: Any = __d.get('name')
         _guard_scalar('Progress.name', __d_name, (str,), False, True, False)
+        __d_type: Any = __d.get('type')
+        _guard_enum('Progress.type', __d_type, _ProgressType, True)
         label: str = __d_label
         caption: Optional[str] = __d_caption
         value: Optional[float] = __d_value
@@ -855,6 +871,7 @@ class Progress:
         visible: Optional[bool] = __d_visible
         tooltip: Optional[str] = __d_tooltip
         name: Optional[str] = __d_name
+        type: Optional[str] = __d_type
         return Progress(
             label,
             caption,
@@ -863,6 +880,7 @@ class Progress:
             visible,
             tooltip,
             name,
+            type,
         )
 
 
@@ -1776,7 +1794,7 @@ class Dropdown:
         self.tooltip = tooltip
         """An optional tooltip message displayed when a user clicks the help icon to the right of the component."""
         self.popup = popup
-        """Whether to present the choices using a pop-up dialog. Defaults to `auto`, which pops up a dialog only when there are more than 100 choices. One of 'auto', 'always', 'never'. See enum h2o_wave.ui.DropdownPopup."""
+        """Whether to present the choices using a pop-up dialog. By default pops up a dialog only for more than 100 choices. Defaults to 'auto'. One of 'auto', 'always', 'never'. See enum h2o_wave.ui.DropdownPopup."""
 
     def dump(self) -> Dict:
         """Returns the contents of this object as a dict."""
@@ -2204,13 +2222,13 @@ class Spinbox:
         self.label = label
         """Text to be displayed alongside the component."""
         self.min = min
-        """The minimum value of the spinbox. Defaults to "0"."""
+        """The minimum value of the spinbox. Defaults to 0."""
         self.max = max
-        """The maximum value of the spinbox. Defaults to "100"."""
+        """The maximum value of the spinbox. Defaults to 100."""
         self.step = step
-        """The difference between two adjacent values of the spinbox. Defaults to "1"."""
+        """The difference between two adjacent values of the spinbox. Defaults to 1."""
         self.value = value
-        """The current value of the spinbox. Defaults to "0"."""
+        """The current value of the spinbox. Defaults to 0."""
         self.disabled = disabled
         """True if this field is disabled."""
         self.width = width
@@ -2585,6 +2603,7 @@ class Button:
             visible: Optional[bool] = None,
             tooltip: Optional[str] = None,
             path: Optional[str] = None,
+            commands: Optional[List[Command]] = None,
     ):
         _guard_scalar('Button.name', name, (str,), True, False, False)
         _guard_scalar('Button.label', label, (str,), False, True, False)
@@ -2598,6 +2617,7 @@ class Button:
         _guard_scalar('Button.visible', visible, (bool,), False, True, False)
         _guard_scalar('Button.tooltip', tooltip, (str,), False, True, False)
         _guard_scalar('Button.path', path, (str,), False, True, False)
+        _guard_vector('Button.commands', commands, (Command,), False, True, False)
         self.name = name
         """An identifying name for this component. If the name is prefixed with a '#', the button sets the location hash to the name when clicked."""
         self.label = label
@@ -2622,6 +2642,8 @@ class Button:
         """An optional tooltip message displayed when a user clicks the help icon to the right of the component."""
         self.path = path
         """The path or URL to link to. If specified, the `name` is ignored. The URL is opened in a new browser window or tab."""
+        self.commands = commands
+        """When specified, a split button is rendered with extra actions tied to it within a context menu. Mutually exclusive with `link` attribute."""
 
     def dump(self) -> Dict:
         """Returns the contents of this object as a dict."""
@@ -2637,6 +2659,7 @@ class Button:
         _guard_scalar('Button.visible', self.visible, (bool,), False, True, False)
         _guard_scalar('Button.tooltip', self.tooltip, (str,), False, True, False)
         _guard_scalar('Button.path', self.path, (str,), False, True, False)
+        _guard_vector('Button.commands', self.commands, (Command,), False, True, False)
         return _dump(
             name=self.name,
             label=self.label,
@@ -2650,6 +2673,7 @@ class Button:
             visible=self.visible,
             tooltip=self.tooltip,
             path=self.path,
+            commands=None if self.commands is None else [__e.dump() for __e in self.commands],
         )
 
     @staticmethod
@@ -2679,6 +2703,8 @@ class Button:
         _guard_scalar('Button.tooltip', __d_tooltip, (str,), False, True, False)
         __d_path: Any = __d.get('path')
         _guard_scalar('Button.path', __d_path, (str,), False, True, False)
+        __d_commands: Any = __d.get('commands')
+        _guard_vector('Button.commands', __d_commands, (dict,), False, True, False)
         name: str = __d_name
         label: Optional[str] = __d_label
         caption: Optional[str] = __d_caption
@@ -2691,6 +2717,7 @@ class Button:
         visible: Optional[bool] = __d_visible
         tooltip: Optional[str] = __d_tooltip
         path: Optional[str] = __d_path
+        commands: Optional[List[Command]] = None if __d_commands is None else [Command.load(__e) for __e in __d_commands]
         return Button(
             name,
             label,
@@ -2704,6 +2731,7 @@ class Button:
             visible,
             tooltip,
             path,
+            commands,
         )
 
 
@@ -2892,6 +2920,7 @@ class FileUpload:
             compact: Optional[bool] = None,
             visible: Optional[bool] = None,
             tooltip: Optional[str] = None,
+            required: Optional[bool] = None,
     ):
         _guard_scalar('FileUpload.name', name, (str,), True, False, False)
         _guard_scalar('FileUpload.label', label, (str,), False, True, False)
@@ -2904,6 +2933,7 @@ class FileUpload:
         _guard_scalar('FileUpload.compact', compact, (bool,), False, True, False)
         _guard_scalar('FileUpload.visible', visible, (bool,), False, True, False)
         _guard_scalar('FileUpload.tooltip', tooltip, (str,), False, True, False)
+        _guard_scalar('FileUpload.required', required, (bool,), False, True, False)
         self.name = name
         """An identifying name for this component."""
         self.label = label
@@ -2917,7 +2947,7 @@ class FileUpload:
         self.max_size = max_size
         """Maximum allowed size (Mb) for all files combined. No limit by default."""
         self.height = height
-        """The height of the file upload, e.g. '400px', '50%', etc. Defaults to 300px."""
+        """The height of the file upload, e.g. '400px', '50%', etc. Defaults to '300px'."""
         self.width = width
         """The width of the file upload, e.g. '100px'. Defaults to '100%'."""
         self.compact = compact
@@ -2926,6 +2956,8 @@ class FileUpload:
         """True if the component should be visible. Defaults to True."""
         self.tooltip = tooltip
         """An optional tooltip message displayed when a user clicks the help icon to the right of the component."""
+        self.required = required
+        """True if this is a required field. Defaults to False."""
 
     def dump(self) -> Dict:
         """Returns the contents of this object as a dict."""
@@ -2940,6 +2972,7 @@ class FileUpload:
         _guard_scalar('FileUpload.compact', self.compact, (bool,), False, True, False)
         _guard_scalar('FileUpload.visible', self.visible, (bool,), False, True, False)
         _guard_scalar('FileUpload.tooltip', self.tooltip, (str,), False, True, False)
+        _guard_scalar('FileUpload.required', self.required, (bool,), False, True, False)
         return _dump(
             name=self.name,
             label=self.label,
@@ -2952,6 +2985,7 @@ class FileUpload:
             compact=self.compact,
             visible=self.visible,
             tooltip=self.tooltip,
+            required=self.required,
         )
 
     @staticmethod
@@ -2979,6 +3013,8 @@ class FileUpload:
         _guard_scalar('FileUpload.visible', __d_visible, (bool,), False, True, False)
         __d_tooltip: Any = __d.get('tooltip')
         _guard_scalar('FileUpload.tooltip', __d_tooltip, (str,), False, True, False)
+        __d_required: Any = __d.get('required')
+        _guard_scalar('FileUpload.required', __d_required, (bool,), False, True, False)
         name: str = __d_name
         label: Optional[str] = __d_label
         multiple: Optional[bool] = __d_multiple
@@ -2990,6 +3026,7 @@ class FileUpload:
         compact: Optional[bool] = __d_compact
         visible: Optional[bool] = __d_visible
         tooltip: Optional[str] = __d_tooltip
+        required: Optional[bool] = __d_required
         return FileUpload(
             name,
             label,
@@ -3002,6 +3039,7 @@ class FileUpload:
             compact,
             visible,
             tooltip,
+            required,
         )
 
 
@@ -3348,6 +3386,15 @@ class TableColumnCellOverflow:
     WRAP = 'wrap'
 
 
+_TableColumnAlign = ['left', 'center', 'right']
+
+
+class TableColumnAlign:
+    LEFT = 'left'
+    CENTER = 'center'
+    RIGHT = 'right'
+
+
 class TableColumn:
     """Create a table column.
     """
@@ -3365,6 +3412,7 @@ class TableColumn:
             cell_type: Optional[TableCellType] = None,
             cell_overflow: Optional[str] = None,
             filters: Optional[List[str]] = None,
+            align: Optional[str] = None,
     ):
         _guard_scalar('TableColumn.name', name, (str,), True, False, False)
         _guard_scalar('TableColumn.label', label, (str,), False, False, False)
@@ -3378,6 +3426,7 @@ class TableColumn:
         _guard_scalar('TableColumn.cell_type', cell_type, (TableCellType,), False, True, False)
         _guard_enum('TableColumn.cell_overflow', cell_overflow, _TableColumnCellOverflow, True)
         _guard_vector('TableColumn.filters', filters, (str,), False, True, False)
+        _guard_enum('TableColumn.align', align, _TableColumnAlign, True)
         self.name = name
         """An identifying name for this column."""
         self.label = label
@@ -3401,7 +3450,9 @@ class TableColumn:
         self.cell_overflow = cell_overflow
         """Defines what to do with a cell's contents in case it does not fit inside the cell. One of 'tooltip', 'wrap'. See enum h2o_wave.ui.TableColumnCellOverflow."""
         self.filters = filters
-        """List of values to allow filtering by, needed when pagination is set. Only applicable to filterable columns."""
+        """Explicit list of values to allow filtering by, needed when pagination is set or custom order is needed. Only applicable to filterable columns."""
+        self.align = align
+        """Defines how to align values in a column. One of 'left', 'center', 'right'. See enum h2o_wave.ui.TableColumnAlign."""
 
     def dump(self) -> Dict:
         """Returns the contents of this object as a dict."""
@@ -3417,6 +3468,7 @@ class TableColumn:
         _guard_scalar('TableColumn.cell_type', self.cell_type, (TableCellType,), False, True, False)
         _guard_enum('TableColumn.cell_overflow', self.cell_overflow, _TableColumnCellOverflow, True)
         _guard_vector('TableColumn.filters', self.filters, (str,), False, True, False)
+        _guard_enum('TableColumn.align', self.align, _TableColumnAlign, True)
         return _dump(
             name=self.name,
             label=self.label,
@@ -3430,6 +3482,7 @@ class TableColumn:
             cell_type=None if self.cell_type is None else self.cell_type.dump(),
             cell_overflow=self.cell_overflow,
             filters=self.filters,
+            align=self.align,
         )
 
     @staticmethod
@@ -3459,6 +3512,8 @@ class TableColumn:
         _guard_enum('TableColumn.cell_overflow', __d_cell_overflow, _TableColumnCellOverflow, True)
         __d_filters: Any = __d.get('filters')
         _guard_vector('TableColumn.filters', __d_filters, (str,), False, True, False)
+        __d_align: Any = __d.get('align')
+        _guard_enum('TableColumn.align', __d_align, _TableColumnAlign, True)
         name: str = __d_name
         label: str = __d_label
         min_width: Optional[str] = __d_min_width
@@ -3471,6 +3526,7 @@ class TableColumn:
         cell_type: Optional[TableCellType] = None if __d_cell_type is None else TableCellType.load(__d_cell_type)
         cell_overflow: Optional[str] = __d_cell_overflow
         filters: Optional[List[str]] = __d_filters
+        align: Optional[str] = __d_align
         return TableColumn(
             name,
             label,
@@ -3484,6 +3540,7 @@ class TableColumn:
             cell_type,
             cell_overflow,
             filters,
+            align,
         )
 
 
@@ -3631,7 +3688,8 @@ class Table:
     This table differs from a markdown table in that it supports clicking or selecting rows. If you simply want to
     display a non-interactive table of information, use a markdown table.
 
-    If `multiple` is set to False (default), each row in the table is clickable. When a row is clicked, the form is
+    If `multiple` is set to False (default), each row in the table is clickable. When a cell in the column with `link=True`
+    (defaults to first column) is clicked or the row is doubleclicked, the form is
     submitted automatically, and `q.args.table_name` is set to `[row_name]`, where `table_name` is the `name` of
     the table, and `row_name` is the `name` of the row that was clicked on.
 
@@ -3663,6 +3721,8 @@ class Table:
             groups: Optional[List[TableGroup]] = None,
             pagination: Optional[TablePagination] = None,
             events: Optional[List[str]] = None,
+            single: Optional[bool] = None,
+            value: Optional[str] = None,
     ):
         _guard_scalar('Table.name', name, (str,), True, False, False)
         _guard_vector('Table.columns', columns, (TableColumn,), False, False, False)
@@ -3680,6 +3740,8 @@ class Table:
         _guard_vector('Table.groups', groups, (TableGroup,), False, True, False)
         _guard_scalar('Table.pagination', pagination, (TablePagination,), False, True, False)
         _guard_vector('Table.events', events, (str,), False, True, False)
+        _guard_scalar('Table.single', single, (bool,), False, True, False)
+        _guard_scalar('Table.value', value, (str,), False, True, False)
         self.name = name
         """An identifying name for this component."""
         self.columns = columns
@@ -3687,15 +3749,15 @@ class Table:
         self.rows = rows
         """The rows in this table. Mutually exclusive with `groups` attr."""
         self.multiple = multiple
-        """True to allow multiple rows to be selected."""
+        """True to allow multiple rows to be selected. Mutually exclusive with `single` attr."""
         self.groupable = groupable
-        """True to allow group by feature. Not applicable when `pagination` is set."""
+        """True to allow group by feature."""
         self.downloadable = downloadable
         """Indicates whether the table rows can be downloaded as a CSV file. Defaults to False."""
         self.resettable = resettable
         """Indicates whether a Reset button should be displayed to reset search / filter / group-by values to their defaults. Defaults to False."""
         self.height = height
-        """The height of the table, e.g. '400px', '50%', etc."""
+        """The height of the table in px (e.g. '200px') or '1' to fill the remaining card space."""
         self.width = width
         """The width of the table, e.g. '100px'. Defaults to '100%'."""
         self.values = values
@@ -3711,7 +3773,11 @@ class Table:
         self.pagination = pagination
         """Display a pagination control at the bottom of the table. Set this value using `ui.table_pagination()`."""
         self.events = events
-        """The events to capture on this table. One of 'search' | 'sort' | 'filter' | 'download' | 'page_change' | 'reset'."""
+        """The events to capture on this table when pagination is set. One of 'search' | 'sort' | 'filter' | 'download' | 'page_change' | 'reset' | 'select'."""
+        self.single = single
+        """True to allow only one row to be selected at time. Mutually exclusive with `multiple` attr."""
+        self.value = value
+        """The name of the selected row. If this parameter is set, single selection will be allowed (`single` is assumed to be `True`)."""
 
     def dump(self) -> Dict:
         """Returns the contents of this object as a dict."""
@@ -3731,6 +3797,8 @@ class Table:
         _guard_vector('Table.groups', self.groups, (TableGroup,), False, True, False)
         _guard_scalar('Table.pagination', self.pagination, (TablePagination,), False, True, False)
         _guard_vector('Table.events', self.events, (str,), False, True, False)
+        _guard_scalar('Table.single', self.single, (bool,), False, True, False)
+        _guard_scalar('Table.value', self.value, (str,), False, True, False)
         return _dump(
             name=self.name,
             columns=[__e.dump() for __e in self.columns],
@@ -3748,6 +3816,8 @@ class Table:
             groups=None if self.groups is None else [__e.dump() for __e in self.groups],
             pagination=None if self.pagination is None else self.pagination.dump(),
             events=self.events,
+            single=self.single,
+            value=self.value,
         )
 
     @staticmethod
@@ -3785,6 +3855,10 @@ class Table:
         _guard_scalar('Table.pagination', __d_pagination, (dict,), False, True, False)
         __d_events: Any = __d.get('events')
         _guard_vector('Table.events', __d_events, (str,), False, True, False)
+        __d_single: Any = __d.get('single')
+        _guard_scalar('Table.single', __d_single, (bool,), False, True, False)
+        __d_value: Any = __d.get('value')
+        _guard_scalar('Table.value', __d_value, (str,), False, True, False)
         name: str = __d_name
         columns: List[TableColumn] = [TableColumn.load(__e) for __e in __d_columns]
         rows: Optional[List[TableRow]] = None if __d_rows is None else [TableRow.load(__e) for __e in __d_rows]
@@ -3801,6 +3875,8 @@ class Table:
         groups: Optional[List[TableGroup]] = None if __d_groups is None else [TableGroup.load(__e) for __e in __d_groups]
         pagination: Optional[TablePagination] = None if __d_pagination is None else TablePagination.load(__d_pagination)
         events: Optional[List[str]] = __d_events
+        single: Optional[bool] = __d_single
+        value: Optional[str] = __d_value
         return Table(
             name,
             columns,
@@ -3818,6 +3894,8 @@ class Table:
             groups,
             pagination,
             events,
+            single,
+            value,
         )
 
 
@@ -3858,7 +3936,7 @@ class Link:
         self.disabled = disabled
         """True if the link should be disabled."""
         self.download = download
-        """True if the link should prompt the user to save the linked URL instead of navigating to it. Works only if `button` is false."""
+        """True if the link should prompt the user to save the linked URL instead of navigating to it."""
         self.button = button
         """True if the link should be rendered as a button."""
         self.width = width
@@ -3963,7 +4041,7 @@ class Links:
         self.label = label
         """The name of the link group."""
         self.inline = inline
-        """Render links horizontally. Defaults to 'false'."""
+        """Render links horizontally. Defaults to False."""
         self.width = width
         """The width of the links, e.g. '100px'."""
 
@@ -5840,7 +5918,7 @@ class Stats:
         self.width = width
         """The width of the stats, e.g. '100px'."""
         self.visible = visible
-        """True if the component should be visible. Defaults to true."""
+        """True if the component should be visible. Defaults to True."""
 
     def dump(self) -> Dict:
         """Returns the contents of this object as a dict."""
@@ -5895,6 +5973,24 @@ class InlineJustify:
     AROUND = 'around'
 
 
+_InlineAlign = ['start', 'end', 'center', 'baseline']
+
+
+class InlineAlign:
+    START = 'start'
+    END = 'end'
+    CENTER = 'center'
+    BASELINE = 'baseline'
+
+
+_InlineDirection = ['row', 'column']
+
+
+class InlineDirection:
+    ROW = 'row'
+    COLUMN = 'column'
+
+
 class Inline:
     """Create an inline (horizontal) list of components.
     """
@@ -5902,27 +5998,45 @@ class Inline:
             self,
             items: List['Component'],
             justify: Optional[str] = None,
+            align: Optional[str] = None,
             inset: Optional[bool] = None,
+            height: Optional[str] = None,
+            direction: Optional[str] = None,
     ):
         _guard_vector('Inline.items', items, (Component,), False, False, False)
         _guard_enum('Inline.justify', justify, _InlineJustify, True)
+        _guard_enum('Inline.align', align, _InlineAlign, True)
         _guard_scalar('Inline.inset', inset, (bool,), False, True, False)
+        _guard_scalar('Inline.height', height, (str,), False, True, False)
+        _guard_enum('Inline.direction', direction, _InlineDirection, True)
         self.items = items
         """The components laid out inline."""
         self.justify = justify
         """Specifies how to lay out the individual components. Defaults to 'start'. One of 'start', 'end', 'center', 'between', 'around'. See enum h2o_wave.ui.InlineJustify."""
+        self.align = align
+        """Specifies how the individual components are aligned on the vertical axis. Defaults to 'center'. One of 'start', 'end', 'center', 'baseline'. See enum h2o_wave.ui.InlineAlign."""
         self.inset = inset
         """Whether to display the components inset from the parent form, with a contrasting background."""
+        self.height = height
+        """Height of the inline container. Accepts any valid CSS unit e.g. '100vh', '300px'. Use '1' to fill the remaining card space."""
+        self.direction = direction
+        """Container direction. Defaults to 'row'. One of 'row', 'column'. See enum h2o_wave.ui.InlineDirection."""
 
     def dump(self) -> Dict:
         """Returns the contents of this object as a dict."""
         _guard_vector('Inline.items', self.items, (Component,), False, False, False)
         _guard_enum('Inline.justify', self.justify, _InlineJustify, True)
+        _guard_enum('Inline.align', self.align, _InlineAlign, True)
         _guard_scalar('Inline.inset', self.inset, (bool,), False, True, False)
+        _guard_scalar('Inline.height', self.height, (str,), False, True, False)
+        _guard_enum('Inline.direction', self.direction, _InlineDirection, True)
         return _dump(
             items=[__e.dump() for __e in self.items],
             justify=self.justify,
+            align=self.align,
             inset=self.inset,
+            height=self.height,
+            direction=self.direction,
         )
 
     @staticmethod
@@ -5932,15 +6046,27 @@ class Inline:
         _guard_vector('Inline.items', __d_items, (dict,), False, False, False)
         __d_justify: Any = __d.get('justify')
         _guard_enum('Inline.justify', __d_justify, _InlineJustify, True)
+        __d_align: Any = __d.get('align')
+        _guard_enum('Inline.align', __d_align, _InlineAlign, True)
         __d_inset: Any = __d.get('inset')
         _guard_scalar('Inline.inset', __d_inset, (bool,), False, True, False)
+        __d_height: Any = __d.get('height')
+        _guard_scalar('Inline.height', __d_height, (str,), False, True, False)
+        __d_direction: Any = __d.get('direction')
+        _guard_enum('Inline.direction', __d_direction, _InlineDirection, True)
         items: List['Component'] = [Component.load(__e) for __e in __d_items]
         justify: Optional[str] = __d_justify
+        align: Optional[str] = __d_align
         inset: Optional[bool] = __d_inset
+        height: Optional[str] = __d_height
+        direction: Optional[str] = __d_direction
         return Inline(
             items,
             justify,
+            align,
             inset,
+            height,
+            direction,
         )
 
 
@@ -5955,6 +6081,7 @@ class Image:
             path: Optional[str] = None,
             width: Optional[str] = None,
             visible: Optional[bool] = None,
+            path_popup: Optional[str] = None,
     ):
         _guard_scalar('Image.title', title, (str,), False, False, False)
         _guard_scalar('Image.type', type, (str,), False, True, False)
@@ -5962,6 +6089,7 @@ class Image:
         _guard_scalar('Image.path', path, (str,), False, True, False)
         _guard_scalar('Image.width', width, (str,), False, True, False)
         _guard_scalar('Image.visible', visible, (bool,), False, True, False)
+        _guard_scalar('Image.path_popup', path_popup, (str,), False, True, False)
         self.title = title
         """The image title, typically displayed as a tooltip."""
         self.type = type
@@ -5973,7 +6101,9 @@ class Image:
         self.width = width
         """The width of the image, e.g. '100px'."""
         self.visible = visible
-        """True if the component should be visible. Defaults to true."""
+        """True if the component should be visible. Defaults to True."""
+        self.path_popup = path_popup
+        """The path or URL or data URL of the image displayed in the popup after clicking the image. Does not replace the `path` property."""
 
     def dump(self) -> Dict:
         """Returns the contents of this object as a dict."""
@@ -5983,6 +6113,7 @@ class Image:
         _guard_scalar('Image.path', self.path, (str,), False, True, False)
         _guard_scalar('Image.width', self.width, (str,), False, True, False)
         _guard_scalar('Image.visible', self.visible, (bool,), False, True, False)
+        _guard_scalar('Image.path_popup', self.path_popup, (str,), False, True, False)
         return _dump(
             title=self.title,
             type=self.type,
@@ -5990,6 +6121,7 @@ class Image:
             path=self.path,
             width=self.width,
             visible=self.visible,
+            path_popup=self.path_popup,
         )
 
     @staticmethod
@@ -6007,12 +6139,15 @@ class Image:
         _guard_scalar('Image.width', __d_width, (str,), False, True, False)
         __d_visible: Any = __d.get('visible')
         _guard_scalar('Image.visible', __d_visible, (bool,), False, True, False)
+        __d_path_popup: Any = __d.get('path_popup')
+        _guard_scalar('Image.path_popup', __d_path_popup, (str,), False, True, False)
         title: str = __d_title
         type: Optional[str] = __d_type
         image: Optional[str] = __d_image
         path: Optional[str] = __d_path
         width: Optional[str] = __d_width
         visible: Optional[bool] = __d_visible
+        path_popup: Optional[str] = __d_path_popup
         return Image(
             title,
             type,
@@ -6020,6 +6155,7 @@ class Image:
             path,
             width,
             visible,
+            path_popup,
         )
 
 
@@ -6411,22 +6547,96 @@ class ImageAnnotatorRect:
         )
 
 
+class ImageAnnotatorPoint:
+    """Create a polygon annotation point with x and y coordinates..
+    """
+    def __init__(
+            self,
+            x: float,
+            y: float,
+    ):
+        _guard_scalar('ImageAnnotatorPoint.x', x, (float, int,), False, False, False)
+        _guard_scalar('ImageAnnotatorPoint.y', y, (float, int,), False, False, False)
+        self.x = x
+        """`x` coordinate of the point."""
+        self.y = y
+        """`y` coordinate of the point."""
+
+    def dump(self) -> Dict:
+        """Returns the contents of this object as a dict."""
+        _guard_scalar('ImageAnnotatorPoint.x', self.x, (float, int,), False, False, False)
+        _guard_scalar('ImageAnnotatorPoint.y', self.y, (float, int,), False, False, False)
+        return _dump(
+            x=self.x,
+            y=self.y,
+        )
+
+    @staticmethod
+    def load(__d: Dict) -> 'ImageAnnotatorPoint':
+        """Creates an instance of this class using the contents of a dict."""
+        __d_x: Any = __d.get('x')
+        _guard_scalar('ImageAnnotatorPoint.x', __d_x, (float, int,), False, False, False)
+        __d_y: Any = __d.get('y')
+        _guard_scalar('ImageAnnotatorPoint.y', __d_y, (float, int,), False, False, False)
+        x: float = __d_x
+        y: float = __d_y
+        return ImageAnnotatorPoint(
+            x,
+            y,
+        )
+
+
+class ImageAnnotatorPolygon:
+    """Create a polygon annotation shape.
+    """
+    def __init__(
+            self,
+            vertices: List[ImageAnnotatorPoint],
+    ):
+        _guard_vector('ImageAnnotatorPolygon.vertices', vertices, (ImageAnnotatorPoint,), False, False, False)
+        self.vertices = vertices
+        """List of polygon points."""
+
+    def dump(self) -> Dict:
+        """Returns the contents of this object as a dict."""
+        _guard_vector('ImageAnnotatorPolygon.vertices', self.vertices, (ImageAnnotatorPoint,), False, False, False)
+        return _dump(
+            vertices=[__e.dump() for __e in self.vertices],
+        )
+
+    @staticmethod
+    def load(__d: Dict) -> 'ImageAnnotatorPolygon':
+        """Creates an instance of this class using the contents of a dict."""
+        __d_vertices: Any = __d.get('vertices')
+        _guard_vector('ImageAnnotatorPolygon.vertices', __d_vertices, (dict,), False, False, False)
+        vertices: List[ImageAnnotatorPoint] = [ImageAnnotatorPoint.load(__e) for __e in __d_vertices]
+        return ImageAnnotatorPolygon(
+            vertices,
+        )
+
+
 class ImageAnnotatorShape:
     """Create a shape to be rendered as an annotation on an image annotator.
     """
     def __init__(
             self,
             rect: Optional[ImageAnnotatorRect] = None,
+            polygon: Optional[ImageAnnotatorPolygon] = None,
     ):
         _guard_scalar('ImageAnnotatorShape.rect', rect, (ImageAnnotatorRect,), False, True, False)
+        _guard_scalar('ImageAnnotatorShape.polygon', polygon, (ImageAnnotatorPolygon,), False, True, False)
         self.rect = rect
+        """No documentation available."""
+        self.polygon = polygon
         """No documentation available."""
 
     def dump(self) -> Dict:
         """Returns the contents of this object as a dict."""
         _guard_scalar('ImageAnnotatorShape.rect', self.rect, (ImageAnnotatorRect,), False, True, False)
+        _guard_scalar('ImageAnnotatorShape.polygon', self.polygon, (ImageAnnotatorPolygon,), False, True, False)
         return _dump(
             rect=None if self.rect is None else self.rect.dump(),
+            polygon=None if self.polygon is None else self.polygon.dump(),
         )
 
     @staticmethod
@@ -6434,9 +6644,13 @@ class ImageAnnotatorShape:
         """Creates an instance of this class using the contents of a dict."""
         __d_rect: Any = __d.get('rect')
         _guard_scalar('ImageAnnotatorShape.rect', __d_rect, (dict,), False, True, False)
+        __d_polygon: Any = __d.get('polygon')
+        _guard_scalar('ImageAnnotatorShape.polygon', __d_polygon, (dict,), False, True, False)
         rect: Optional[ImageAnnotatorRect] = None if __d_rect is None else ImageAnnotatorRect.load(__d_rect)
+        polygon: Optional[ImageAnnotatorPolygon] = None if __d_polygon is None else ImageAnnotatorPolygon.load(__d_polygon)
         return ImageAnnotatorShape(
             rect,
+            polygon,
         )
 
 
@@ -6493,6 +6707,8 @@ class ImageAnnotator:
             items: Optional[List[ImageAnnotatorItem]] = None,
             trigger: Optional[bool] = None,
             image_height: Optional[str] = None,
+            allowed_shapes: Optional[List[str]] = None,
+            events: Optional[List[str]] = None,
     ):
         _guard_scalar('ImageAnnotator.name', name, (str,), True, False, False)
         _guard_scalar('ImageAnnotator.image', image, (str,), False, False, False)
@@ -6501,6 +6717,8 @@ class ImageAnnotator:
         _guard_vector('ImageAnnotator.items', items, (ImageAnnotatorItem,), False, True, False)
         _guard_scalar('ImageAnnotator.trigger', trigger, (bool,), False, True, False)
         _guard_scalar('ImageAnnotator.image_height', image_height, (str,), False, True, False)
+        _guard_vector('ImageAnnotator.allowed_shapes', allowed_shapes, (str,), False, True, False)
+        _guard_vector('ImageAnnotator.events', events, (str,), False, True, False)
         self.name = name
         """An identifying name for this component."""
         self.image = image
@@ -6515,6 +6733,10 @@ class ImageAnnotator:
         """True if the form should be submitted as soon as an annotation is drawn."""
         self.image_height = image_height
         """The card’s image height. The actual image size is used by default."""
+        self.allowed_shapes = allowed_shapes
+        """List of allowed shapes. Available values are 'rect' and 'polygon'. If not set, all shapes are available by default."""
+        self.events = events
+        """The events to capture on this image annotator. One of `click` or `tool_change`."""
 
     def dump(self) -> Dict:
         """Returns the contents of this object as a dict."""
@@ -6525,6 +6747,8 @@ class ImageAnnotator:
         _guard_vector('ImageAnnotator.items', self.items, (ImageAnnotatorItem,), False, True, False)
         _guard_scalar('ImageAnnotator.trigger', self.trigger, (bool,), False, True, False)
         _guard_scalar('ImageAnnotator.image_height', self.image_height, (str,), False, True, False)
+        _guard_vector('ImageAnnotator.allowed_shapes', self.allowed_shapes, (str,), False, True, False)
+        _guard_vector('ImageAnnotator.events', self.events, (str,), False, True, False)
         return _dump(
             name=self.name,
             image=self.image,
@@ -6533,6 +6757,8 @@ class ImageAnnotator:
             items=None if self.items is None else [__e.dump() for __e in self.items],
             trigger=self.trigger,
             image_height=self.image_height,
+            allowed_shapes=self.allowed_shapes,
+            events=self.events,
         )
 
     @staticmethod
@@ -6552,6 +6778,10 @@ class ImageAnnotator:
         _guard_scalar('ImageAnnotator.trigger', __d_trigger, (bool,), False, True, False)
         __d_image_height: Any = __d.get('image_height')
         _guard_scalar('ImageAnnotator.image_height', __d_image_height, (str,), False, True, False)
+        __d_allowed_shapes: Any = __d.get('allowed_shapes')
+        _guard_vector('ImageAnnotator.allowed_shapes', __d_allowed_shapes, (str,), False, True, False)
+        __d_events: Any = __d.get('events')
+        _guard_vector('ImageAnnotator.events', __d_events, (str,), False, True, False)
         name: str = __d_name
         image: str = __d_image
         title: str = __d_title
@@ -6559,6 +6789,8 @@ class ImageAnnotator:
         items: Optional[List[ImageAnnotatorItem]] = None if __d_items is None else [ImageAnnotatorItem.load(__e) for __e in __d_items]
         trigger: Optional[bool] = __d_trigger
         image_height: Optional[str] = __d_image_height
+        allowed_shapes: Optional[List[str]] = __d_allowed_shapes
+        events: Optional[List[str]] = __d_events
         return ImageAnnotator(
             name,
             image,
@@ -6567,6 +6799,8 @@ class ImageAnnotator:
             items,
             trigger,
             image_height,
+            allowed_shapes,
+            events,
         )
 
 
@@ -6640,11 +6874,13 @@ class CopyableText:
             label: str,
             name: Optional[str] = None,
             multiline: Optional[bool] = None,
+            height: Optional[str] = None,
     ):
         _guard_scalar('CopyableText.value', value, (str,), False, False, False)
         _guard_scalar('CopyableText.label', label, (str,), False, False, False)
         _guard_scalar('CopyableText.name', name, (str,), False, True, False)
         _guard_scalar('CopyableText.multiline', multiline, (bool,), False, True, False)
+        _guard_scalar('CopyableText.height', height, (str,), False, True, False)
         self.value = value
         """Text to be displayed inside the component."""
         self.label = label
@@ -6653,6 +6889,8 @@ class CopyableText:
         """An identifying name for this component."""
         self.multiline = multiline
         """True if the component should allow multi-line text entry."""
+        self.height = height
+        """Custom height in px (e.g. '200px') or '1' to fill the remaining card space. Requires `multiline` to be set."""
 
     def dump(self) -> Dict:
         """Returns the contents of this object as a dict."""
@@ -6660,11 +6898,13 @@ class CopyableText:
         _guard_scalar('CopyableText.label', self.label, (str,), False, False, False)
         _guard_scalar('CopyableText.name', self.name, (str,), False, True, False)
         _guard_scalar('CopyableText.multiline', self.multiline, (bool,), False, True, False)
+        _guard_scalar('CopyableText.height', self.height, (str,), False, True, False)
         return _dump(
             value=self.value,
             label=self.label,
             name=self.name,
             multiline=self.multiline,
+            height=self.height,
         )
 
     @staticmethod
@@ -6678,15 +6918,19 @@ class CopyableText:
         _guard_scalar('CopyableText.name', __d_name, (str,), False, True, False)
         __d_multiline: Any = __d.get('multiline')
         _guard_scalar('CopyableText.multiline', __d_multiline, (bool,), False, True, False)
+        __d_height: Any = __d.get('height')
+        _guard_scalar('CopyableText.height', __d_height, (str,), False, True, False)
         value: str = __d_value
         label: str = __d_label
         name: Optional[str] = __d_name
         multiline: Optional[bool] = __d_multiline
+        height: Optional[str] = __d_height
         return CopyableText(
             value,
             label,
             name,
             multiline,
+            height,
         )
 
 
@@ -6699,19 +6943,23 @@ class Menu:
             icon: Optional[str] = None,
             image: Optional[str] = None,
             name: Optional[str] = None,
+            label: Optional[str] = None,
     ):
         _guard_vector('Menu.items', items, (Command,), False, False, False)
         _guard_scalar('Menu.icon', icon, (str,), False, True, False)
         _guard_scalar('Menu.image', image, (str,), False, True, False)
         _guard_scalar('Menu.name', name, (str,), True, True, False)
+        _guard_scalar('Menu.label', label, (str,), False, True, False)
         self.items = items
         """Commands to render."""
         self.icon = icon
-        """The card's icon. Mutually exclusive with the image."""
+        """The card's icon."""
         self.image = image
-        """The card’s image, preferably user avatar. Mutually exclusive with the icon."""
+        """The card’s image, preferably user avatar."""
         self.name = name
         """An identifying name for this component."""
+        self.label = label
+        """The text displayed next to the chevron."""
 
     def dump(self) -> Dict:
         """Returns the contents of this object as a dict."""
@@ -6719,11 +6967,13 @@ class Menu:
         _guard_scalar('Menu.icon', self.icon, (str,), False, True, False)
         _guard_scalar('Menu.image', self.image, (str,), False, True, False)
         _guard_scalar('Menu.name', self.name, (str,), True, True, False)
+        _guard_scalar('Menu.label', self.label, (str,), False, True, False)
         return _dump(
             items=[__e.dump() for __e in self.items],
             icon=self.icon,
             image=self.image,
             name=self.name,
+            label=self.label,
         )
 
     @staticmethod
@@ -6737,15 +6987,19 @@ class Menu:
         _guard_scalar('Menu.image', __d_image, (str,), False, True, False)
         __d_name: Any = __d.get('name')
         _guard_scalar('Menu.name', __d_name, (str,), True, True, False)
+        __d_label: Any = __d.get('label')
+        _guard_scalar('Menu.label', __d_label, (str,), False, True, False)
         items: List[Command] = [Command.load(__e) for __e in __d_items]
         icon: Optional[str] = __d_icon
         image: Optional[str] = __d_image
         name: Optional[str] = __d_name
+        label: Optional[str] = __d_label
         return Menu(
             items,
             icon,
             image,
             name,
+            label,
         )
 
 
@@ -7763,6 +8017,93 @@ class ChatCard:
         )
 
 
+class ChatbotCard:
+    """Create a chatbot card to allow getting prompts from users and providing them with LLM generated answers.
+    """
+    def __init__(
+            self,
+            box: str,
+            name: str,
+            data: PackedRecord,
+            placeholder: Optional[str] = None,
+            events: Optional[List[str]] = None,
+            generating: Optional[bool] = None,
+            commands: Optional[List[Command]] = None,
+    ):
+        _guard_scalar('ChatbotCard.box', box, (str,), False, False, False)
+        _guard_scalar('ChatbotCard.name', name, (str,), True, False, False)
+        _guard_scalar('ChatbotCard.placeholder', placeholder, (str,), False, True, False)
+        _guard_vector('ChatbotCard.events', events, (str,), False, True, False)
+        _guard_scalar('ChatbotCard.generating', generating, (bool,), False, True, False)
+        _guard_vector('ChatbotCard.commands', commands, (Command,), False, True, False)
+        self.box = box
+        """A string indicating how to place this component on the page."""
+        self.name = name
+        """An identifying name for this component."""
+        self.data = data
+        """Chat messages data. Requires cyclic buffer."""
+        self.placeholder = placeholder
+        """Chat input box placeholder. Use for prompt examples."""
+        self.events = events
+        """The events to capture on this chatbot. One of 'stop'."""
+        self.generating = generating
+        """True to show a button to stop the text generation. Defaults to False."""
+        self.commands = commands
+        """Contextual menu commands for this component."""
+
+    def dump(self) -> Dict:
+        """Returns the contents of this object as a dict."""
+        _guard_scalar('ChatbotCard.box', self.box, (str,), False, False, False)
+        _guard_scalar('ChatbotCard.name', self.name, (str,), True, False, False)
+        _guard_scalar('ChatbotCard.placeholder', self.placeholder, (str,), False, True, False)
+        _guard_vector('ChatbotCard.events', self.events, (str,), False, True, False)
+        _guard_scalar('ChatbotCard.generating', self.generating, (bool,), False, True, False)
+        _guard_vector('ChatbotCard.commands', self.commands, (Command,), False, True, False)
+        return _dump(
+            view='chatbot',
+            box=self.box,
+            name=self.name,
+            data=self.data,
+            placeholder=self.placeholder,
+            events=self.events,
+            generating=self.generating,
+            commands=None if self.commands is None else [__e.dump() for __e in self.commands],
+        )
+
+    @staticmethod
+    def load(__d: Dict) -> 'ChatbotCard':
+        """Creates an instance of this class using the contents of a dict."""
+        __d_box: Any = __d.get('box')
+        _guard_scalar('ChatbotCard.box', __d_box, (str,), False, False, False)
+        __d_name: Any = __d.get('name')
+        _guard_scalar('ChatbotCard.name', __d_name, (str,), True, False, False)
+        __d_data: Any = __d.get('data')
+        __d_placeholder: Any = __d.get('placeholder')
+        _guard_scalar('ChatbotCard.placeholder', __d_placeholder, (str,), False, True, False)
+        __d_events: Any = __d.get('events')
+        _guard_vector('ChatbotCard.events', __d_events, (str,), False, True, False)
+        __d_generating: Any = __d.get('generating')
+        _guard_scalar('ChatbotCard.generating', __d_generating, (bool,), False, True, False)
+        __d_commands: Any = __d.get('commands')
+        _guard_vector('ChatbotCard.commands', __d_commands, (dict,), False, True, False)
+        box: str = __d_box
+        name: str = __d_name
+        data: PackedRecord = __d_data
+        placeholder: Optional[str] = __d_placeholder
+        events: Optional[List[str]] = __d_events
+        generating: Optional[bool] = __d_generating
+        commands: Optional[List[Command]] = None if __d_commands is None else [Command.load(__e) for __e in __d_commands]
+        return ChatbotCard(
+            box,
+            name,
+            data,
+            placeholder,
+            events,
+            generating,
+            commands,
+        )
+
+
 _EditorCardMode = ['public', 'private']
 
 
@@ -8104,12 +8445,14 @@ class FrameCard:
             title: str,
             path: Optional[str] = None,
             content: Optional[str] = None,
+            compact: Optional[bool] = None,
             commands: Optional[List[Command]] = None,
     ):
         _guard_scalar('FrameCard.box', box, (str,), False, False, False)
         _guard_scalar('FrameCard.title', title, (str,), False, False, False)
         _guard_scalar('FrameCard.path', path, (str,), False, True, False)
         _guard_scalar('FrameCard.content', content, (str,), False, True, False)
+        _guard_scalar('FrameCard.compact', compact, (bool,), False, True, False)
         _guard_vector('FrameCard.commands', commands, (Command,), False, True, False)
         self.box = box
         """A string indicating how to place this component on the page."""
@@ -8119,6 +8462,8 @@ class FrameCard:
         """The path or URL of the web page, e.g. `/foo.html` or `http://example.com/foo.html`."""
         self.content = content
         """The HTML content of the page. A string containing `<html>...</html>`."""
+        self.compact = compact
+        """True if title and padding should be removed. Defaults to False."""
         self.commands = commands
         """Contextual menu commands for this component."""
 
@@ -8128,6 +8473,7 @@ class FrameCard:
         _guard_scalar('FrameCard.title', self.title, (str,), False, False, False)
         _guard_scalar('FrameCard.path', self.path, (str,), False, True, False)
         _guard_scalar('FrameCard.content', self.content, (str,), False, True, False)
+        _guard_scalar('FrameCard.compact', self.compact, (bool,), False, True, False)
         _guard_vector('FrameCard.commands', self.commands, (Command,), False, True, False)
         return _dump(
             view='frame',
@@ -8135,6 +8481,7 @@ class FrameCard:
             title=self.title,
             path=self.path,
             content=self.content,
+            compact=self.compact,
             commands=None if self.commands is None else [__e.dump() for __e in self.commands],
         )
 
@@ -8149,18 +8496,22 @@ class FrameCard:
         _guard_scalar('FrameCard.path', __d_path, (str,), False, True, False)
         __d_content: Any = __d.get('content')
         _guard_scalar('FrameCard.content', __d_content, (str,), False, True, False)
+        __d_compact: Any = __d.get('compact')
+        _guard_scalar('FrameCard.compact', __d_compact, (bool,), False, True, False)
         __d_commands: Any = __d.get('commands')
         _guard_vector('FrameCard.commands', __d_commands, (dict,), False, True, False)
         box: str = __d_box
         title: str = __d_title
         path: Optional[str] = __d_path
         content: Optional[str] = __d_content
+        compact: Optional[bool] = __d_compact
         commands: Optional[List[Command]] = None if __d_commands is None else [Command.load(__e) for __e in __d_commands]
         return FrameCard(
             box,
             title,
             path,
             content,
+            compact,
             commands,
         )
 
@@ -8323,12 +8674,14 @@ class NavItem:
             icon: Optional[str] = None,
             disabled: Optional[bool] = None,
             tooltip: Optional[str] = None,
+            path: Optional[str] = None,
     ):
         _guard_scalar('NavItem.name', name, (str,), True, False, False)
         _guard_scalar('NavItem.label', label, (str,), False, False, False)
         _guard_scalar('NavItem.icon', icon, (str,), False, True, False)
         _guard_scalar('NavItem.disabled', disabled, (bool,), False, True, False)
         _guard_scalar('NavItem.tooltip', tooltip, (str,), False, True, False)
+        _guard_scalar('NavItem.path', path, (str,), False, True, False)
         self.name = name
         """The name of this item. Prefix the name with a '#' to trigger hash-change navigation."""
         self.label = label
@@ -8339,6 +8692,8 @@ class NavItem:
         """True if this item should be disabled."""
         self.tooltip = tooltip
         """An optional tooltip message displayed when a user hovers over this item."""
+        self.path = path
+        """The path or URL to link to. If specified, the `name` is ignored. The URL is opened in a new browser window or tab. E.g. `/foo.html` or `http://example.com/foo.html`"""
 
     def dump(self) -> Dict:
         """Returns the contents of this object as a dict."""
@@ -8347,12 +8702,14 @@ class NavItem:
         _guard_scalar('NavItem.icon', self.icon, (str,), False, True, False)
         _guard_scalar('NavItem.disabled', self.disabled, (bool,), False, True, False)
         _guard_scalar('NavItem.tooltip', self.tooltip, (str,), False, True, False)
+        _guard_scalar('NavItem.path', self.path, (str,), False, True, False)
         return _dump(
             name=self.name,
             label=self.label,
             icon=self.icon,
             disabled=self.disabled,
             tooltip=self.tooltip,
+            path=self.path,
         )
 
     @staticmethod
@@ -8368,17 +8725,21 @@ class NavItem:
         _guard_scalar('NavItem.disabled', __d_disabled, (bool,), False, True, False)
         __d_tooltip: Any = __d.get('tooltip')
         _guard_scalar('NavItem.tooltip', __d_tooltip, (str,), False, True, False)
+        __d_path: Any = __d.get('path')
+        _guard_scalar('NavItem.path', __d_path, (str,), False, True, False)
         name: str = __d_name
         label: str = __d_label
         icon: Optional[str] = __d_icon
         disabled: Optional[bool] = __d_disabled
         tooltip: Optional[str] = __d_tooltip
+        path: Optional[str] = __d_path
         return NavItem(
             name,
             label,
             icon,
             disabled,
             tooltip,
+            path,
         )
 
 
@@ -8582,6 +8943,7 @@ class ImageCard:
             image: Optional[str] = None,
             data: Optional[PackedRecord] = None,
             path: Optional[str] = None,
+            path_popup: Optional[str] = None,
             commands: Optional[List[Command]] = None,
     ):
         _guard_scalar('ImageCard.box', box, (str,), False, False, False)
@@ -8589,6 +8951,7 @@ class ImageCard:
         _guard_scalar('ImageCard.type', type, (str,), False, True, False)
         _guard_scalar('ImageCard.image', image, (str,), False, True, False)
         _guard_scalar('ImageCard.path', path, (str,), False, True, False)
+        _guard_scalar('ImageCard.path_popup', path_popup, (str,), False, True, False)
         _guard_vector('ImageCard.commands', commands, (Command,), False, True, False)
         self.box = box
         """A string indicating how to place this component on the page."""
@@ -8602,6 +8965,8 @@ class ImageCard:
         """Data for this card."""
         self.path = path
         """The path or URL or data URL of the image, e.g. `/foo.png` or `http://example.com/foo.png` or `data:image/png;base64,???`."""
+        self.path_popup = path_popup
+        """The path or URL or data URL of the image displayed in the popup after clicking the image. Does not replace the `path` property."""
         self.commands = commands
         """Contextual menu commands for this component."""
 
@@ -8612,6 +8977,7 @@ class ImageCard:
         _guard_scalar('ImageCard.type', self.type, (str,), False, True, False)
         _guard_scalar('ImageCard.image', self.image, (str,), False, True, False)
         _guard_scalar('ImageCard.path', self.path, (str,), False, True, False)
+        _guard_scalar('ImageCard.path_popup', self.path_popup, (str,), False, True, False)
         _guard_vector('ImageCard.commands', self.commands, (Command,), False, True, False)
         return _dump(
             view='image',
@@ -8621,6 +8987,7 @@ class ImageCard:
             image=self.image,
             data=self.data,
             path=self.path,
+            path_popup=self.path_popup,
             commands=None if self.commands is None else [__e.dump() for __e in self.commands],
         )
 
@@ -8638,6 +9005,8 @@ class ImageCard:
         __d_data: Any = __d.get('data')
         __d_path: Any = __d.get('path')
         _guard_scalar('ImageCard.path', __d_path, (str,), False, True, False)
+        __d_path_popup: Any = __d.get('path_popup')
+        _guard_scalar('ImageCard.path_popup', __d_path_popup, (str,), False, True, False)
         __d_commands: Any = __d.get('commands')
         _guard_vector('ImageCard.commands', __d_commands, (dict,), False, True, False)
         box: str = __d_box
@@ -8646,6 +9015,7 @@ class ImageCard:
         image: Optional[str] = __d_image
         data: Optional[PackedRecord] = __d_data
         path: Optional[str] = __d_path
+        path_popup: Optional[str] = __d_path_popup
         commands: Optional[List[Command]] = None if __d_commands is None else [Command.load(__e) for __e in __d_commands]
         return ImageCard(
             box,
@@ -8654,6 +9024,7 @@ class ImageCard:
             image,
             data,
             path,
+            path_popup,
             commands,
         )
 
@@ -9114,11 +9485,13 @@ class MarkupCard:
             box: str,
             title: str,
             content: str,
+            compact: Optional[bool] = None,
             commands: Optional[List[Command]] = None,
     ):
         _guard_scalar('MarkupCard.box', box, (str,), False, False, False)
         _guard_scalar('MarkupCard.title', title, (str,), False, False, False)
         _guard_scalar('MarkupCard.content', content, (str,), False, False, False)
+        _guard_scalar('MarkupCard.compact', compact, (bool,), False, True, False)
         _guard_vector('MarkupCard.commands', commands, (Command,), False, True, False)
         self.box = box
         """A string indicating how to place this component on the page."""
@@ -9126,6 +9499,8 @@ class MarkupCard:
         """The title for this card."""
         self.content = content
         """The HTML content."""
+        self.compact = compact
+        """True if outer spacing should be removed. Defaults to False."""
         self.commands = commands
         """Contextual menu commands for this component."""
 
@@ -9134,12 +9509,14 @@ class MarkupCard:
         _guard_scalar('MarkupCard.box', self.box, (str,), False, False, False)
         _guard_scalar('MarkupCard.title', self.title, (str,), False, False, False)
         _guard_scalar('MarkupCard.content', self.content, (str,), False, False, False)
+        _guard_scalar('MarkupCard.compact', self.compact, (bool,), False, True, False)
         _guard_vector('MarkupCard.commands', self.commands, (Command,), False, True, False)
         return _dump(
             view='markup',
             box=self.box,
             title=self.title,
             content=self.content,
+            compact=self.compact,
             commands=None if self.commands is None else [__e.dump() for __e in self.commands],
         )
 
@@ -9152,16 +9529,20 @@ class MarkupCard:
         _guard_scalar('MarkupCard.title', __d_title, (str,), False, False, False)
         __d_content: Any = __d.get('content')
         _guard_scalar('MarkupCard.content', __d_content, (str,), False, False, False)
+        __d_compact: Any = __d.get('compact')
+        _guard_scalar('MarkupCard.compact', __d_compact, (bool,), False, True, False)
         __d_commands: Any = __d.get('commands')
         _guard_vector('MarkupCard.commands', __d_commands, (dict,), False, True, False)
         box: str = __d_box
         title: str = __d_title
         content: str = __d_content
+        compact: Optional[bool] = __d_compact
         commands: Optional[List[Command]] = None if __d_commands is None else [Command.load(__e) for __e in __d_commands]
         return MarkupCard(
             box,
             title,
             content,
+            compact,
             commands,
         )
 

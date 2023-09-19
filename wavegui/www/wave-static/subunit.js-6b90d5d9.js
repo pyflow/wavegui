@@ -1,0 +1,1 @@
+import n from"./subunit-f5d1c72e.js";function i(){i.warned||(i.warned=!0,console.log('Deprecation (warning): Using file extension in specifier is deprecated, use "highlight.js/lib/languages/subunit" instead of "highlight.js/lib/languages/subunit.js"'))}i();export{n as default};

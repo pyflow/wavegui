@@ -1,0 +1,1 @@
+import t from"./typescript-def66f35.js";function e(){e.warned||(e.warned=!0,console.log('Deprecation (warning): Using file extension in specifier is deprecated, use "highlight.js/lib/languages/typescript" instead of "highlight.js/lib/languages/typescript.js"'))}e();export{t as default};

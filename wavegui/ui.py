@@ -302,6 +302,7 @@ def progress(
         visible: Optional[bool] = None,
         tooltip: Optional[str] = None,
         name: Optional[str] = None,
+        type: Optional[str] = None,
 ) -> Component:
     """Create a progress bar.
 
@@ -324,13 +325,14 @@ def progress(
     Instead change the label to reflect the change if necessary. Bars moving backwards reduce confidence in the service.
 
     Args:
-        label: The text displayed above the bar.
-        caption: The text displayed below the bar.
+        label: The text displayed above the bar or right to the spinner.
+        caption: The text displayed below the bar or spinner.
         value: The progress, between 0.0 and 1.0, or -1 (default) if indeterminate.
         width: The width of the separator, e.g. '100px'. Defaults to '100%'.
         visible: True if the component should be visible. Defaults to True.
         tooltip: An optional tooltip message displayed when a user clicks the help icon to the right of the component.
         name: An identifying name for this component.
+        type: The type of progress bar to be displayed. One of 'bar', 'spinner'. Defaults to 'bar'. One of 'bar', 'spinner'. See enum h2o_wave.ui.ProgressType.
     Returns:
         A `h2o_wave.types.Progress` instance.
     """
@@ -342,6 +344,7 @@ def progress(
         visible,
         tooltip,
         name,
+        type,
     ))
 
 
@@ -703,7 +706,7 @@ def dropdown(
         width: The width of the dropdown, e.g. '100px'. Defaults to '100%'.
         visible: True if the component should be visible. Defaults to True.
         tooltip: An optional tooltip message displayed when a user clicks the help icon to the right of the component.
-        popup: Whether to present the choices using a pop-up dialog. Defaults to `auto`, which pops up a dialog only when there are more than 100 choices. One of 'auto', 'always', 'never'. See enum h2o_wave.ui.DropdownPopup.
+        popup: Whether to present the choices using a pop-up dialog. By default pops up a dialog only for more than 100 choices. Defaults to 'auto'. One of 'auto', 'always', 'never'. See enum h2o_wave.ui.DropdownPopup.
     Returns:
         A `h2o_wave.types.Dropdown` instance.
     """
@@ -863,10 +866,10 @@ def spinbox(
     Args:
         name: An identifying name for this component.
         label: Text to be displayed alongside the component.
-        min: The minimum value of the spinbox. Defaults to "0".
-        max: The maximum value of the spinbox. Defaults to "100".
-        step: The difference between two adjacent values of the spinbox. Defaults to "1".
-        value: The current value of the spinbox. Defaults to "0".
+        min: The minimum value of the spinbox. Defaults to 0.
+        max: The maximum value of the spinbox. Defaults to 100.
+        step: The difference between two adjacent values of the spinbox. Defaults to 1.
+        value: The current value of the spinbox. Defaults to 0.
         disabled: True if this field is disabled.
         width: The width of the spinbox, e.g. '100px'. Defaults to '100%'.
         visible: True if the component should be visible. Defaults to True.
@@ -995,6 +998,7 @@ def button(
         visible: Optional[bool] = None,
         tooltip: Optional[str] = None,
         path: Optional[str] = None,
+        commands: Optional[List[Command]] = None,
 ) -> Component:
     """Create a button.
 
@@ -1026,6 +1030,7 @@ def button(
         visible: True if the component should be visible. Defaults to True.
         tooltip: An optional tooltip message displayed when a user clicks the help icon to the right of the component.
         path: The path or URL to link to. If specified, the `name` is ignored. The URL is opened in a new browser window or tab.
+        commands: When specified, a split button is rendered with extra actions tied to it within a context menu. Mutually exclusive with `link` attribute.
     Returns:
         A `h2o_wave.types.Button` instance.
     """
@@ -1042,6 +1047,7 @@ def button(
         visible,
         tooltip,
         path,
+        commands,
     ))
 
 
@@ -1123,6 +1129,7 @@ def file_upload(
         compact: Optional[bool] = None,
         visible: Optional[bool] = None,
         tooltip: Optional[str] = None,
+        required: Optional[bool] = None,
 ) -> Component:
     """Create a file upload component.
     A file upload component allows a user to browse, select and upload one or more files.
@@ -1134,11 +1141,12 @@ def file_upload(
         file_extensions: List of allowed file extensions, e.g. `pdf`, `docx`, etc.
         max_file_size: Maximum allowed size (Mb) per file. No limit by default.
         max_size: Maximum allowed size (Mb) for all files combined. No limit by default.
-        height: The height of the file upload, e.g. '400px', '50%', etc. Defaults to 300px.
+        height: The height of the file upload, e.g. '400px', '50%', etc. Defaults to '300px'.
         width: The width of the file upload, e.g. '100px'. Defaults to '100%'.
         compact: True if the component should be displayed compactly (without drag-and-drop capabilities). Defaults to False.
         visible: True if the component should be visible. Defaults to True.
         tooltip: An optional tooltip message displayed when a user clicks the help icon to the right of the component.
+        required: True if this is a required field. Defaults to False.
     Returns:
         A `h2o_wave.types.FileUpload` instance.
     """
@@ -1154,6 +1162,7 @@ def file_upload(
         compact,
         visible,
         tooltip,
+        required,
     ))
 
 
@@ -1294,6 +1303,7 @@ def table_column(
         cell_type: Optional[TableCellType] = None,
         cell_overflow: Optional[str] = None,
         filters: Optional[List[str]] = None,
+        align: Optional[str] = None,
 ) -> TableColumn:
     """Create a table column.
 
@@ -1309,7 +1319,8 @@ def table_column(
         data_type: Defines the data type of this column. Time column takes either ISO 8601 date string or unix epoch miliseconds. Defaults to `string`. One of 'string', 'number', 'time'. See enum h2o_wave.ui.TableColumnDataType.
         cell_type: Defines how to render each cell in this column. Renders as plain text by default.
         cell_overflow: Defines what to do with a cell's contents in case it does not fit inside the cell. One of 'tooltip', 'wrap'. See enum h2o_wave.ui.TableColumnCellOverflow.
-        filters: List of values to allow filtering by, needed when pagination is set. Only applicable to filterable columns.
+        filters: Explicit list of values to allow filtering by, needed when pagination is set or custom order is needed. Only applicable to filterable columns.
+        align: Defines how to align values in a column. One of 'left', 'center', 'right'. See enum h2o_wave.ui.TableColumnAlign.
     Returns:
         A `h2o_wave.types.TableColumn` instance.
     """
@@ -1326,6 +1337,7 @@ def table_column(
         cell_type,
         cell_overflow,
         filters,
+        align,
     )
 
 
@@ -1405,13 +1417,16 @@ def table(
         groups: Optional[List[TableGroup]] = None,
         pagination: Optional[TablePagination] = None,
         events: Optional[List[str]] = None,
+        single: Optional[bool] = None,
+        value: Optional[str] = None,
 ) -> Component:
     """Create an interactive table.
 
     This table differs from a markdown table in that it supports clicking or selecting rows. If you simply want to
     display a non-interactive table of information, use a markdown table.
 
-    If `multiple` is set to False (default), each row in the table is clickable. When a row is clicked, the form is
+    If `multiple` is set to False (default), each row in the table is clickable. When a cell in the column with `link=True`
+    (defaults to first column) is clicked or the row is doubleclicked, the form is
     submitted automatically, and `q.args.table_name` is set to `[row_name]`, where `table_name` is the `name` of
     the table, and `row_name` is the `name` of the row that was clicked on.
 
@@ -1429,11 +1444,11 @@ def table(
         name: An identifying name for this component.
         columns: The columns in this table.
         rows: The rows in this table. Mutually exclusive with `groups` attr.
-        multiple: True to allow multiple rows to be selected.
-        groupable: True to allow group by feature. Not applicable when `pagination` is set.
+        multiple: True to allow multiple rows to be selected. Mutually exclusive with `single` attr.
+        groupable: True to allow group by feature.
         downloadable: Indicates whether the table rows can be downloaded as a CSV file. Defaults to False.
         resettable: Indicates whether a Reset button should be displayed to reset search / filter / group-by values to their defaults. Defaults to False.
-        height: The height of the table, e.g. '400px', '50%', etc.
+        height: The height of the table in px (e.g. '200px') or '1' to fill the remaining card space.
         width: The width of the table, e.g. '100px'. Defaults to '100%'.
         values: The names of the selected rows. If this parameter is set, multiple selections will be allowed (`multiple` is assumed to be `True`).
         checkbox_visibility: Controls visibility of table rows when `multiple` is set to `True`. Defaults to 'on-hover'. One of 'always', 'on-hover', 'hidden'. See enum h2o_wave.ui.TableCheckboxVisibility.
@@ -1441,7 +1456,9 @@ def table(
         tooltip: An optional tooltip message displayed when a user clicks the help icon to the right of the component.
         groups: Creates collapsible / expandable groups of data rows. Mutually exclusive with `rows` attr.
         pagination: Display a pagination control at the bottom of the table. Set this value using `ui.table_pagination()`.
-        events: The events to capture on this table. One of 'search' | 'sort' | 'filter' | 'download' | 'page_change' | 'reset'.
+        events: The events to capture on this table when pagination is set. One of 'search' | 'sort' | 'filter' | 'download' | 'page_change' | 'reset' | 'select'.
+        single: True to allow only one row to be selected at time. Mutually exclusive with `multiple` attr.
+        value: The name of the selected row. If this parameter is set, single selection will be allowed (`single` is assumed to be `True`).
     Returns:
         A `h2o_wave.types.Table` instance.
     """
@@ -1462,6 +1479,8 @@ def table(
         groups,
         pagination,
         events,
+        single,
+        value,
     ))
 
 
@@ -1487,7 +1506,7 @@ def link(
         label: The text to be displayed. If blank, the `path` is used as the label.
         path: The path or URL to link to.
         disabled: True if the link should be disabled.
-        download: True if the link should prompt the user to save the linked URL instead of navigating to it. Works only if `button` is false.
+        download: True if the link should prompt the user to save the linked URL instead of navigating to it.
         button: True if the link should be rendered as a button.
         width: The width of the link, e.g. '100px'.
         visible: True if the component should be visible. Defaults to True.
@@ -1522,7 +1541,7 @@ def links(
     Args:
         items: The links contained in this group.
         label: The name of the link group.
-        inline: Render links horizontally. Defaults to 'false'.
+        inline: Render links horizontally. Defaults to False.
         width: The width of the links, e.g. '100px'.
     Returns:
         A `h2o_wave.types.Links` instance.
@@ -2174,7 +2193,7 @@ def stats(
         justify: Specifies how to lay out the individual stats. Defaults to 'start'. One of 'start', 'end', 'center', 'between', 'around'. See enum h2o_wave.ui.StatsJustify.
         inset: Whether to display the stats with a contrasting background.
         width: The width of the stats, e.g. '100px'.
-        visible: True if the component should be visible. Defaults to true.
+        visible: True if the component should be visible. Defaults to True.
     Returns:
         A `h2o_wave.types.Stats` instance.
     """
@@ -2190,21 +2209,30 @@ def stats(
 def inline(
         items: List[Component],
         justify: Optional[str] = None,
+        align: Optional[str] = None,
         inset: Optional[bool] = None,
+        height: Optional[str] = None,
+        direction: Optional[str] = None,
 ) -> Component:
     """Create an inline (horizontal) list of components.
 
     Args:
         items: The components laid out inline.
         justify: Specifies how to lay out the individual components. Defaults to 'start'. One of 'start', 'end', 'center', 'between', 'around'. See enum h2o_wave.ui.InlineJustify.
+        align: Specifies how the individual components are aligned on the vertical axis. Defaults to 'center'. One of 'start', 'end', 'center', 'baseline'. See enum h2o_wave.ui.InlineAlign.
         inset: Whether to display the components inset from the parent form, with a contrasting background.
+        height: Height of the inline container. Accepts any valid CSS unit e.g. '100vh', '300px'. Use '1' to fill the remaining card space.
+        direction: Container direction. Defaults to 'row'. One of 'row', 'column'. See enum h2o_wave.ui.InlineDirection.
     Returns:
         A `h2o_wave.types.Inline` instance.
     """
     return Component(inline=Inline(
         items,
         justify,
+        align,
         inset,
+        height,
+        direction,
     ))
 
 
@@ -2215,6 +2243,7 @@ def image(
         path: Optional[str] = None,
         width: Optional[str] = None,
         visible: Optional[bool] = None,
+        path_popup: Optional[str] = None,
 ) -> Component:
     """Create an image.
 
@@ -2224,7 +2253,8 @@ def image(
         image: Image data, base64-encoded.
         path: The path or URL or data URL of the image, e.g. `/foo.png` or `http://example.com/foo.png` or `data:image/png;base64,???`.
         width: The width of the image, e.g. '100px'.
-        visible: True if the component should be visible. Defaults to true.
+        visible: True if the component should be visible. Defaults to True.
+        path_popup: The path or URL or data URL of the image displayed in the popup after clicking the image. Does not replace the `path` property.
     Returns:
         A `h2o_wave.types.Image` instance.
     """
@@ -2235,6 +2265,7 @@ def image(
         path,
         width,
         visible,
+        path_popup,
     ))
 
 
@@ -2391,6 +2422,39 @@ def image_annotator_rect(
     ))
 
 
+def image_annotator_point(
+        x: float,
+        y: float,
+) -> ImageAnnotatorPoint:
+    """Create a polygon annotation point with x and y coordinates..
+
+    Args:
+        x: `x` coordinate of the point.
+        y: `y` coordinate of the point.
+    Returns:
+        A `h2o_wave.types.ImageAnnotatorPoint` instance.
+    """
+    return ImageAnnotatorPoint(
+        x,
+        y,
+    )
+
+
+def image_annotator_polygon(
+        vertices: List[ImageAnnotatorPoint],
+) -> ImageAnnotatorShape:
+    """Create a polygon annotation shape.
+
+    Args:
+        vertices: List of polygon points.
+    Returns:
+        A `h2o_wave.types.ImageAnnotatorPolygon` instance.
+    """
+    return ImageAnnotatorShape(polygon=ImageAnnotatorPolygon(
+        vertices,
+    ))
+
+
 def image_annotator_item(
         shape: ImageAnnotatorShape,
         tag: str,
@@ -2417,6 +2481,8 @@ def image_annotator(
         items: Optional[List[ImageAnnotatorItem]] = None,
         trigger: Optional[bool] = None,
         image_height: Optional[str] = None,
+        allowed_shapes: Optional[List[str]] = None,
+        events: Optional[List[str]] = None,
 ) -> Component:
     """Create an image annotator component.
 
@@ -2430,6 +2496,8 @@ def image_annotator(
         items: Annotations to display on the image, if any.
         trigger: True if the form should be submitted as soon as an annotation is drawn.
         image_height: The card’s image height. The actual image size is used by default.
+        allowed_shapes: List of allowed shapes. Available values are 'rect' and 'polygon'. If not set, all shapes are available by default.
+        events: The events to capture on this image annotator. One of `click` or `tool_change`.
     Returns:
         A `h2o_wave.types.ImageAnnotator` instance.
     """
@@ -2441,6 +2509,8 @@ def image_annotator(
         items,
         trigger,
         image_height,
+        allowed_shapes,
+        events,
     ))
 
 
@@ -2474,6 +2544,7 @@ def copyable_text(
         label: str,
         name: Optional[str] = None,
         multiline: Optional[bool] = None,
+        height: Optional[str] = None,
 ) -> Component:
     """Create a copyable text component.
     Use this component when you want to enable your users to quickly copy paste sections of text.
@@ -2483,6 +2554,7 @@ def copyable_text(
         label: The text displayed above the textbox.
         name: An identifying name for this component.
         multiline: True if the component should allow multi-line text entry.
+        height: Custom height in px (e.g. '200px') or '1' to fill the remaining card space. Requires `multiline` to be set.
     Returns:
         A `h2o_wave.types.CopyableText` instance.
     """
@@ -2491,6 +2563,7 @@ def copyable_text(
         label,
         name,
         multiline,
+        height,
     ))
 
 
@@ -2499,14 +2572,16 @@ def menu(
         icon: Optional[str] = None,
         image: Optional[str] = None,
         name: Optional[str] = None,
+        label: Optional[str] = None,
 ) -> Component:
     """Create a contextual menu component. Useful when you have a lot of links and want to conserve the space.
 
     Args:
         items: Commands to render.
-        icon: The card's icon. Mutually exclusive with the image.
-        image: The card’s image, preferably user avatar. Mutually exclusive with the icon.
+        icon: The card's icon.
+        image: The card’s image, preferably user avatar.
         name: An identifying name for this component.
+        label: The text displayed next to the chevron.
     Returns:
         A `h2o_wave.types.Menu` instance.
     """
@@ -2515,6 +2590,7 @@ def menu(
         icon,
         image,
         name,
+        label,
     ))
 
 
@@ -2721,6 +2797,39 @@ def chat_card(
     )
 
 
+def chatbot_card(
+        box: str,
+        name: str,
+        data: PackedRecord,
+        placeholder: Optional[str] = None,
+        events: Optional[List[str]] = None,
+        generating: Optional[bool] = None,
+        commands: Optional[List[Command]] = None,
+) -> ChatbotCard:
+    """Create a chatbot card to allow getting prompts from users and providing them with LLM generated answers.
+
+    Args:
+        box: A string indicating how to place this component on the page.
+        name: An identifying name for this component.
+        data: Chat messages data. Requires cyclic buffer.
+        placeholder: Chat input box placeholder. Use for prompt examples.
+        events: The events to capture on this chatbot. One of 'stop'.
+        generating: True to show a button to stop the text generation. Defaults to False.
+        commands: Contextual menu commands for this component.
+    Returns:
+        A `h2o_wave.types.ChatbotCard` instance.
+    """
+    return ChatbotCard(
+        box,
+        name,
+        data,
+        placeholder,
+        events,
+        generating,
+        commands,
+    )
+
+
 def editor_card(
         box: str,
         mode: str,
@@ -2840,6 +2949,7 @@ def frame_card(
         title: str,
         path: Optional[str] = None,
         content: Optional[str] = None,
+        compact: Optional[bool] = None,
         commands: Optional[List[Command]] = None,
 ) -> FrameCard:
     """Render a card containing a HTML page inside an inline frame (an `iframe`).
@@ -2851,6 +2961,7 @@ def frame_card(
         title: The title for this card.
         path: The path or URL of the web page, e.g. `/foo.html` or `http://example.com/foo.html`.
         content: The HTML content of the page. A string containing `<html>...</html>`.
+        compact: True if title and padding should be removed. Defaults to False.
         commands: Contextual menu commands for this component.
     Returns:
         A `h2o_wave.types.FrameCard` instance.
@@ -2860,6 +2971,7 @@ def frame_card(
         title,
         path,
         content,
+        compact,
         commands,
     )
 
@@ -2930,6 +3042,7 @@ def nav_item(
         icon: Optional[str] = None,
         disabled: Optional[bool] = None,
         tooltip: Optional[str] = None,
+        path: Optional[str] = None,
 ) -> NavItem:
     """Create a navigation item.
 
@@ -2939,6 +3052,7 @@ def nav_item(
         icon: An optional icon to display next to the label.
         disabled: True if this item should be disabled.
         tooltip: An optional tooltip message displayed when a user hovers over this item.
+        path: The path or URL to link to. If specified, the `name` is ignored. The URL is opened in a new browser window or tab. E.g. `/foo.html` or `http://example.com/foo.html`
     Returns:
         A `h2o_wave.types.NavItem` instance.
     """
@@ -2948,6 +3062,7 @@ def nav_item(
         icon,
         disabled,
         tooltip,
+        path,
     )
 
 
@@ -3025,6 +3140,7 @@ def image_card(
         image: Optional[str] = None,
         data: Optional[PackedRecord] = None,
         path: Optional[str] = None,
+        path_popup: Optional[str] = None,
         commands: Optional[List[Command]] = None,
 ) -> ImageCard:
     """Create a card that displays a base64-encoded image.
@@ -3036,6 +3152,7 @@ def image_card(
         image: Image data, base64-encoded.
         data: Data for this card.
         path: The path or URL or data URL of the image, e.g. `/foo.png` or `http://example.com/foo.png` or `data:image/png;base64,???`.
+        path_popup: The path or URL or data URL of the image displayed in the popup after clicking the image. Does not replace the `path` property.
         commands: Contextual menu commands for this component.
     Returns:
         A `h2o_wave.types.ImageCard` instance.
@@ -3047,6 +3164,7 @@ def image_card(
         image,
         data,
         path,
+        path_popup,
         commands,
     )
 
@@ -3229,6 +3347,7 @@ def markup_card(
         box: str,
         title: str,
         content: str,
+        compact: Optional[bool] = None,
         commands: Optional[List[Command]] = None,
 ) -> MarkupCard:
     """Render HTML content.
@@ -3237,6 +3356,7 @@ def markup_card(
         box: A string indicating how to place this component on the page.
         title: The title for this card.
         content: The HTML content.
+        compact: True if outer spacing should be removed. Defaults to False.
         commands: Contextual menu commands for this component.
     Returns:
         A `h2o_wave.types.MarkupCard` instance.
@@ -3245,6 +3365,7 @@ def markup_card(
         box,
         title,
         content,
+        compact,
         commands,
     )
 

@@ -13,8 +13,15 @@
 # limitations under the License.
 
 from io import BufferedReader
+import asyncio
+import ipaddress
 import json
+import platform
 import secrets
+import shutil
+import subprocess
+from urllib.parse import urlparse
+from uuid import uuid4
 import warnings
 import logging
 import os
@@ -40,6 +47,7 @@ def _get_env(key: str, value: Any):
 
 
 _default_internal_address = 'http://127.0.0.1:8000'
+_base_url = _get_env('BASE_URL', '/')
 
 
 class _Config:
@@ -291,6 +299,13 @@ class Ref:
             raise ValueError('Data instances cannot be used in assignments.')
         getattr(self, PAGE)._track(_set_op(self, key, _dump(value)))
 
+    def __iadd__(self, value):
+        if not getattr(self, KEY).endswith('data'):
+            raise ValueError('+= can only be used on list data buffers.')
+        page = getattr(self, PAGE)
+        page._track(_set_op(self, '__append__', _dump(value)))
+        page._skip_next_track = True
+
 
 class Data:
     """
@@ -298,35 +313,38 @@ class Data:
 
     Args:
         fields: The names of the fields (columns names) in the data, either a list or tuple or string containing space-separated names.
-        size: The number of rows to allocate memory for. Positive for fixed buffers, negative for circular buffers and zero for variable length buffers.
-        data: Initial data. Must be either a key-row ``dict`` for variable-length buffers OR a row ``list`` for fixed-size and circular buffers.
+        size: The number of rows to allocate memory for. Positive for fixed buffers, negative for cyclic buffers and zero for variable length buffers.
+        data: Initial data. Must be either a key-row ``dict`` for variable-length buffers OR a row ``list`` for fixed-size and cyclic buffers.
+        t: Buffer type. One of 'list', 'map', 'cyclic' or 'fixed'. Overrides the buffer type inferred from the size.
     """
 
-    def __init__(self, fields: Union[str, tuple, list], size: int = 0, data: Optional[Union[dict, list]] = None):
+    def __init__(self, fields: Union[str, tuple, list], size: int = 0, data: Optional[Union[dict, list]] = None, t: Optional[str] = None):
         self.fields = fields
         self.data = data
         self.size = size
+        self.type = t
 
     def dump(self):
         f = self.fields
         d = self.data
         n = self.size
+        t = self.type
         if d:
-            if isinstance(d, dict):
+            if t == 'list':
+                return dict(l=dict(f=f, d=d))
+            if t == 'map' or isinstance(d, dict):
                 return dict(m=dict(f=f, d=d))
-            else:
-                if n < 0:
-                    return dict(c=dict(f=f, d=d))
-                else:
-                    return dict(f=dict(f=f, d=d))
+            if t == 'cyclic' or n < 0:
+                return dict(c=dict(f=f, d=d))
+            return dict(f=dict(f=f, d=d))
         else:
-            if n == 0:
+            if t == 'list':
+                return dict(l=dict(f=f, n=n))
+            if t == 'map' or n == 0:
                 return dict(m=dict(f=f))
-            else:
-                if n < 0:
-                    return dict(c=dict(f=f, n=-n))
-                else:
-                    return dict(f=dict(f=f, n=n))
+            if t == 'cyclic' or n < 0:
+                return dict(c=dict(f=f, n=-n))
+            return dict(f=dict(f=f, n=n))
 
 
 def data(
@@ -335,6 +353,7 @@ def data(
         rows: Optional[Union[dict, list]] = None,
         columns: Optional[Union[dict, list]] = None,
         pack=False,
+        t: Optional[str] = None,
 ) -> Union[Data, str]:
     """
     Create a `h2o_wave.core.Data` instance for associating data with cards.
@@ -347,10 +366,11 @@ def data(
 
     Args:
         fields: The names of the fields (columns names) in the data, either a list or tuple or string containing space-separated names.
-        size: The number of rows to allocate memory for. Positive for fixed buffers, negative for circular buffers and zero for variable length buffers.
+        size: The number of rows to allocate memory for. Positive for fixed buffers, negative for cyclic buffers and zero for variable length buffers.
         rows: The rows in this data.
         columns: The columns in this data.
         pack: True to return a packed string representing the data instead of a `h2o_wave.core.Data` placeholder.
+        t: Buffer type. One of 'list', 'map', 'cyclic' or 'fixed'. Overrides the buffer type inferred from the size.
 
     Returns:
         Either a `h2o_wave.core.Data` placeholder or a packed string representing the data.
@@ -396,7 +416,7 @@ def data(
     if not _is_int(size):
         raise ValueError('size must be int')
 
-    return Data(fields, size, rows)
+    return Data(fields, size, rows, t)
 
 
 class _ServerCacheBase:
@@ -460,6 +480,8 @@ class PageBase:
     def __init__(self, url: str):
         self.url = url
         self._changes = []
+        # HACK: Overloading += operator makes unnecessary __setattr__ call. Skip it to prevent redundant ops.
+        self._skip_next_track = False
 
     def add(self, key: str, card: Any) -> Ref:
         """
@@ -502,6 +524,9 @@ class PageBase:
         return Ref(self, key)
 
     def _track(self, op: dict):
+        if self._skip_next_track:
+            self._skip_next_track = False
+            return
         self._changes.append(op)
 
     def _diff(self):
@@ -657,17 +682,46 @@ class Site:
         Returns:
             A list of remote URLs for the uploaded files, in order.
         """
-        upload_files = []
-        file_handles: List[BufferedReader] = []
         for f in files:
-            file_handle = open(f, 'rb')
-            upload_files.append(('files', (os.path.basename(f), file_handle)))
-            file_handles.append(file_handle)
+            if not os.path.isfile(f):
+                raise ValueError(f'{f} is not a file.')
 
-        res = self._http.post(f'{_config.hub_address}_f/', files=upload_files)
+        waved_dir = _get_env('WAVED_DIR', None)
+        data_dir = _get_env('DATA_DIR', 'data')
 
-        for h in file_handles:
-            h.close()
+        # If we know the path of waved and running app on the same machine,
+        # we can simply copy the files instead of making an HTTP request.
+        if _can_do_local_upload(data_dir, waved_dir):
+            try:
+                uploaded_files = []
+                for f in files:
+                    uuid = str(uuid4())
+                    dst = _get_upload_dst_path(data_dir, waved_dir, uuid)
+                    os.makedirs(dst, exist_ok=True)
+
+                    if 'Windows' in platform.system():
+                        src = os.path.dirname(f) or os.getcwd()
+                        args = ['robocopy', src, dst, os.path.basename(f), '/J', '/W:0']
+                    else:
+                        args = ['cp', f, dst]
+
+                    _, err = subprocess.Popen(args, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL).communicate()
+                    if err:
+                        raise ValueError(err.decode())
+
+                    uploaded_files.append(f'{_base_url}_f/{uuid}/{os.path.basename(f)}')
+                return uploaded_files
+            except:
+                pass
+
+        uploaded_files = []
+        for f in files:
+            uploaded_files.append(('files', (os.path.basename(f), open(f, 'rb'))))
+
+        res = self._http.post(f'{_config.hub_address}_f/', files=uploaded_files)
+
+        for _, f in uploaded_files:
+            f[1].close()
 
         if res.status_code == 200:
             return json.loads(res.text)['files']
@@ -687,17 +741,38 @@ class Site:
         if not os.path.isdir(directory):
             raise ValueError(f'{directory} is not a directory.')
 
+        waved_dir = _get_env('WAVED_DIR', None)
+        data_dir = _get_env('DATA_DIR', 'data')
+
+        # If we know the path of waved and running app on the same machine,
+        # we can simply copy the files instead of making an HTTP request.
+        if _can_do_local_upload(data_dir, waved_dir):
+            try:
+                uuid = str(uuid4())
+                dst = _get_upload_dst_path(data_dir, waved_dir, uuid)
+                os.makedirs(dst, exist_ok=True)
+
+                if 'Windows' in platform.system():
+                    args = ['robocopy', directory, dst, '/S', '/J', '/W:0', '*.*']
+                else:
+                    args = ['rsync', '-a', os.path.join(directory, '.'), dst]
+
+                _, err = subprocess.Popen(args, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL).communicate()
+                if err:
+                    raise ValueError(err.decode())
+
+                return [f'{_base_url}_f/{uuid}']
+            except:
+                pass
+
         upload_files = []
-        file_handles: List[BufferedReader] = []
         for f in _get_files_in_directory(directory, []):
-            file_handle = open(f, 'rb')
-            upload_files.append(('files', (os.path.relpath(f, directory), file_handle)))
-            file_handles.append(file_handle)
+            upload_files.append(('files', (os.path.relpath(f, directory), open(f, 'rb'))))
 
         res = self._http.post(f'{_config.hub_address}_f/', headers={'Wave-Directory-Upload': "True"}, files=upload_files)
 
-        for h in file_handles:
-            h.close()
+        for _, f in upload_files:
+            f[1].close()
 
         if res.status_code == 200:
             return json.loads(res.text)['files']
@@ -719,9 +794,12 @@ class Site:
         # If path is a directory, get basename from url
         filepath = os.path.join(path, os.path.basename(url)) if os.path.isdir(path) else path
 
-        with open(filepath, 'wb') as f:
-            with self._http.stream('GET', f'{_config.hub_host_address}{url}') as r:
-                for chunk in r.iter_bytes():
+        with self._http.stream('GET', f'{_config.hub_host_address}{url}') as res:
+            if res.status_code != 200:
+                res.read()
+                raise ServiceError(f'Download failed (code={res.status_code}): {res.text}')
+            with open(filepath, 'wb') as f:
+                for chunk in res.iter_bytes():
                     f.write(chunk)
 
         return filepath
@@ -838,17 +916,34 @@ class AsyncSite:
         if not os.path.isdir(directory):
             raise ValueError(f'{directory} is not a directory.')
 
+        waved_dir = _get_env('WAVED_DIR', None)
+        data_dir = _get_env('DATA_DIR', 'data')
+
+        # If we know the path of waved and running app on the same machine,
+        # we can simply copy the files instead of making an HTTP request.
+        if _can_do_local_upload(data_dir, waved_dir):
+            try:
+                uuid = str(uuid4())
+                dst = _get_upload_dst_path(data_dir, waved_dir, uuid)
+                os.makedirs(dst, exist_ok=True)
+
+                if 'Windows' in platform.system():
+                    args = ['robocopy', directory, dst, '/S', '/J', '/W:0', '*.*']
+                else:
+                    args = ['rsync', '-a', os.path.join(directory, '.'), dst]
+
+                return [await _copy_in_subprocess(args, uuid)]
+            except:
+                pass
+
         upload_files = []
-        file_handles: List[BufferedReader] = []
         for f in _get_files_in_directory(directory, []):
-            file_handle = open(f, 'rb')
-            upload_files.append(('files', (os.path.relpath(f, directory), file_handle)))
-            file_handles.append(file_handle)
+            upload_files.append(('files', (os.path.relpath(f, directory), open(f, 'rb'))))
 
         res = await self._http.post(f'{_config.hub_address}_f/', headers={'Wave-Directory-Upload': "True"}, files=upload_files)
 
-        for h in file_handles:
-            h.close()
+        for _, f in upload_files:
+            f[1].close()
 
         if res.status_code == 200:
             return json.loads(res.text)['files']
@@ -864,6 +959,35 @@ class AsyncSite:
         Returns:
             A list of remote URLs for the uploaded files, in order.
         """
+        for f in files:
+            if not os.path.isfile(f):
+                raise ValueError(f'{f} is not a file.')
+
+        waved_dir = _get_env('WAVED_DIR', None)
+        data_dir = _get_env('DATA_DIR', 'data')
+
+        # If we know the path of waved and running app on the same machine,
+        # we can simply copy the files instead of making an HTTP request.
+        if _can_do_local_upload(data_dir, waved_dir):
+            try:
+                tasks = []
+                for f in files:
+                    uuid = str(uuid4())
+                    dst = _get_upload_dst_path(data_dir, waved_dir, uuid)
+                    os.makedirs(dst, exist_ok=True)
+
+                    if 'Windows' in platform.system():
+                        src = os.path.dirname(f) or os.getcwd()
+                        args = ['robocopy', src, dst, os.path.basename(f), '/J', '/W:0']
+                    else:
+                        args = ['cp', f, dst]
+
+                    tasks.append(asyncio.create_task(_copy_in_subprocess(args, uuid, f)))
+
+                return await asyncio.gather(*tasks)
+            except:
+                pass
+
         upload_files = []
         file_handles: List[BufferedReader] = []
         for f in files:
@@ -894,9 +1018,12 @@ class AsyncSite:
         # If path is a directory, get basename from url
         filepath = os.path.join(path, os.path.basename(url)) if os.path.isdir(path) else path
 
-        with open(filepath, 'wb') as f:
-            async with self._http.stream('GET', f'{_config.hub_host_address}{url}') as r:
-                async for chunk in r.aiter_bytes():
+        async with self._http.stream('GET', f'{_config.hub_host_address}{url}') as res:
+            if res.status_code != 200:
+                await res.aread()
+                raise ServiceError(f'Download failed (code={res.status_code}): {res.text}')
+            with open(filepath, 'wb') as f:
+                async for chunk in res.aiter_bytes():
                     f.write(chunk)
 
         return filepath
@@ -958,6 +1085,19 @@ class AsyncSite:
         raise ServiceError(f'Proxy request failed (code={res.status_code}): {res.text}')
 
 
+async def _copy_in_subprocess(args: List[str], uuid: str, f='') -> str:
+    p = await asyncio.create_subprocess_exec(*args, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL)
+    _, err = await p.communicate()
+
+    if err:
+        raise ValueError(err.decode())
+
+    if f:
+        return f'{_base_url}_f/{uuid}/{os.path.basename(f)}'
+    else:
+        return f'{_base_url}_f/{uuid}'
+
+
 def _get_files_in_directory(directory: str, files: List[str]) -> List[str]:
     for f in os.listdir(directory):
         path = os.path.join(directory, f)
@@ -966,6 +1106,7 @@ def _get_files_in_directory(directory: str, files: List[str]) -> List[str]:
         else:
             _get_files_in_directory(path, files)
     return files
+
 
 def marshal(d: Any) -> str:
     """
@@ -1003,3 +1144,28 @@ def pack(data: Any) -> str:
     The object or value compressed into a string.
     """
     return 'data:' + marshal(_dump(data))
+
+
+def _is_loopback_address() -> bool:
+    try:
+        hostname = urlparse(_config.hub_address).hostname
+        return ipaddress.ip_address(hostname).is_loopback
+    except ValueError:
+        return False
+
+
+def _get_upload_dst_path(data_dir: str, waved_dir: str, uuid: str) -> str:
+    if os.path.isabs(data_dir):
+        return os.path.join(data_dir, 'f', uuid)
+    else:
+        return os.path.join(waved_dir, data_dir, 'f', uuid)
+
+
+def _can_do_local_upload(data_dir: str, waved_dir: str) -> bool:
+    if _get_env('NO_COPY_UPLOAD', 'false').lower() in ['true', '1', 't']:
+        return False
+
+    if not _is_loopback_address():
+        return False
+
+    return bool(os.path.isabs(data_dir) or (waved_dir and data_dir))
