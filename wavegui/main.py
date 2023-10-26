@@ -145,7 +145,7 @@ class WaveClient:
             if req in [ClientRequest.invalid_request, ClientRequest.bad_request, None]:
                 continue
 
-            await self.process(req)
+            await self.process(req, websocket.url, websocket.headers)
 
             if req.action == 'watch':
                 self.page_route = req.addr
@@ -193,13 +193,15 @@ class WaveClient:
             page.send_done()
 
 
-    async def process(self, req):
+    async def process(self, req, url, headers):
         args = req.json()
         events_state: Optional[dict] = args.get('', None)
         q = Query(
             session = self.session,
             user_info = self.user_info,
             route = req.addr,
+            url = url,
+            headers = headers,
             args = Expando(args),
             events = Expando(events_state),
             task_manager = self.task_manager

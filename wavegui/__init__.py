@@ -1,4 +1,4 @@
-__version__ = '0.26.2'
+__version__ = '0.26.3dev'
 
 from .core import Ref, data, pack, Expando
 from .types import *

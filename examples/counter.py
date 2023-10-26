@@ -21,6 +21,8 @@ async def counter_back(q:Q):
 @app('/counter')
 async def counter(q: Q):
     # Add a Markdown card named `hello` to the page
+    print(q.url)
+    print(q.headers)
     q.page['counter'] = ui.markdown_card(
             box='1 1 2 2',
             title='Counter: 0',

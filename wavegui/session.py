@@ -117,6 +117,8 @@ class Query:
             user_info: UserInfo,
             session: Session,
             route: str,
+            url: str,
+            headers: dict,
             args: Expando,
             events: Expando,
             task_manager
@@ -127,6 +129,8 @@ class Query:
         self.events = events
         self.user_info = user_info
         self.route = route
+        self.url = url
+        self.headers = headers
         self.session = session
         self.user = session.user
         self.task_manager = task_manager
