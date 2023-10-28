@@ -275,6 +275,7 @@ class WaveApp:
         self._route = None
         self._routes = {}
         self._static_dirs = {}
+        self._handlers = {}
         self._startup = []
         self._shutdown = []
         self._info = {'name': "Wavegui App",
@@ -292,6 +293,9 @@ class WaveApp:
 
     def setup_static(self, local_dir, name='static'):
         self._static_dirs[name] = local_dir
+
+    def setup_handler(self, handler, name):
+        self._handlers[name] = handler
 
     def setup_info(self, name, description=None, icon=None, logo=None, manifest=None):
         if name:
@@ -395,6 +399,9 @@ class WaveServer:
                 routes.append(Route(route, self.app_page))
             for key, static_dir in app._static_dirs.items():
                 routes.append(Mount(f'{app._route}/{key}', MimeStaticFiles(directory=static_dir)))
+            for key, handler in app._handlers.items():
+                routes.append(Route(f'{app._route}/{key}', handler))
+                routes.append(Route(f'{app._route}/{key}/{{file_path:path}}', handler))
             startup.extend(app._startup)
             shutdown.extend(app._shutdown)
         for key, static_dir in self._static_dirs.items():
