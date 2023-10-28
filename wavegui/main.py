@@ -394,11 +394,11 @@ class WaveServer:
                     self.default_route = route
                 routes.append(Route(route, self.app_page))
             for key, static_dir in app._static_dirs.items():
-                routes.append(Mount(f'{app._route}/{key}', MimeStaticFiles(directory=static_dir, follow_symlink=True)))
+                routes.append(Mount(f'{app._route}/{key}', MimeStaticFiles(directory=static_dir)))
             startup.extend(app._startup)
             shutdown.extend(app._shutdown)
         for key, static_dir in self._static_dirs.items():
-            routes.append(Mount(f'/{key}', MimeStaticFiles(directory=static_dir, html=True, follow_symlink=True)))
+            routes.append(Mount(f'/{key}', MimeStaticFiles(directory=static_dir, html=True)))
         routes.extend([
             Route('/', self.homepage),
             WebSocketRoute('/_s/', self.handle_ws),
