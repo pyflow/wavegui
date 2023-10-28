@@ -274,7 +274,7 @@ class WaveApp:
         self._base_url = ''
         self._route = None
         self._routes = {}
-        self._static_dir = None
+        self._static_dirs = {}
         self._startup = []
         self._shutdown = []
         self._info = {'name': "Wavegui App",
@@ -290,8 +290,8 @@ class WaveApp:
         self._routes[route] = handle
         WaveApp.register(self)
 
-    def setup_static(self, local_dir):
-        self._static_dir = local_dir
+    def setup_static(self, local_dir, name='static'):
+        self._static_dirs[name] = local_dir
 
     def setup_info(self, name, description=None, icon=None, logo=None, manifest=None):
         if name:
@@ -343,20 +343,34 @@ class WaveApp:
 
 
 class WaveServer:
-    _server = None
+    _wave_server = None
 
     @classmethod
     def run(cls, init_options=None, no_reload=True, log_level="info", **kwargs):
-        if not cls._server:
+        if not cls._wave_server:
             init_kwargs = init_options or {}
-            cls._server = cls(**init_kwargs)
-        cls._server.run_forever(no_reload=no_reload, log_level=log_level, **kwargs)
+            cls._wave_server = cls(**init_kwargs)
+            cls._wave_server.init_routes()
+            cls._wave_server.init_server()
+        cls._wave_server.run_forever(no_reload=no_reload, log_level=log_level, **kwargs)
 
+    @classmethod
+    def setup(cls, init_options=None, on_startup=None, on_shutdown=None, static_dirs=None):
+        init_kwargs = init_options or {}
+        inst = cls(**init_kwargs)
+        inst._startup.extend(on_startup or [])
+        inst._shutdown.extend(on_shutdown or [])
+        for key, static_dir in (static_dirs or {}).items():
+            inst.setup_static(static_dir, key)
+        inst.init_routes()
+        inst.init_server()
+        return inst
 
     def __init__(self, **kwargs):
         self._routes = []
         self._server = None
         self._startup = []
+        self._static_dirs = {}
         self._shutdown = []
         self.default_route = ''
         self._upload_dir = kwargs.get('upload_dir') or os.path.abspath('./data/uploads')
@@ -379,10 +393,12 @@ class WaveServer:
                 if not self.default_route:
                     self.default_route = route
                 routes.append(Route(route, self.app_page))
-            if app._static_dir:
-                routes.append(Mount(f'{app._route}/static', MimeStaticFiles(directory=app._static_dir)))
+            for key, static_dir in app._static_dirs.items():
+                routes.append(Mount(f'{app._route}/{key}', MimeStaticFiles(directory=static_dir, follow_symlink=True)))
             startup.extend(app._startup)
             shutdown.extend(app._shutdown)
+        for key, static_dir in self._static_dirs.items():
+            routes.append(Mount(f'/{key}', MimeStaticFiles(directory=static_dir, html=True, follow_symlink=True)))
         routes.extend([
             Route('/', self.homepage),
             WebSocketRoute('/_s/', self.handle_ws),
@@ -397,6 +413,9 @@ class WaveServer:
         self._routes = routes
         self._startup = startup
         self._shutdown = shutdown
+
+    def setup_static(self, local_dir, name):
+        self._static_dirs[name] = local_dir
 
     def init_server(self):
         middleware = []
@@ -461,6 +480,4 @@ class WaveServer:
     def run_forever(self, no_reload=True, log_level="info", **kwargs):
         port = kwargs.get('port', 8000)
         sys.path.insert(0, '.')
-        self.init_routes()
-        self.init_server()
         uvicorn.run(self, host='0.0.0.0', port=port, reload=not no_reload, log_level=log_level)
