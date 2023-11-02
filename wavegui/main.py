@@ -390,8 +390,6 @@ class WaveServer:
     def init_routes(self):
         self.default_route = ''
         routes = []
-        startup = []
-        shutdown = []
         for app in WaveApp.all():
             for route in app._routes:
                 if not self.default_route:
@@ -402,8 +400,8 @@ class WaveServer:
             for key, handler in app._handlers.items():
                 routes.append(Route(f'{app._route}/{key}', handler))
                 routes.append(Route(f'{app._route}/{key}/{{file_path:path}}', handler))
-            startup.extend(app._startup)
-            shutdown.extend(app._shutdown)
+            self._startup.extend(app._startup)
+            self._shutdown.extend(app._shutdown)
         for key, static_dir in self._static_dirs.items():
             routes.append(Mount(f'/{key}', MimeStaticFiles(directory=static_dir, html=True)))
         routes.extend([
@@ -418,8 +416,6 @@ class WaveServer:
             Route('/logo512.png', self.home_file)
             ])
         self._routes = routes
-        self._startup = startup
-        self._shutdown = shutdown
 
     def setup_static(self, local_dir, name):
         self._static_dirs[name] = local_dir
